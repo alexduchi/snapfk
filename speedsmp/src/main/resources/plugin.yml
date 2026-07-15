@@ -1,14 +1,19 @@
 name: SpeedSMP
-version: '1.0.4-pvp'
+version: '1.0.4-global'
 main: fr.neo.speedsmp.SpeedSmpPlugin
 api-version: '1.21.11'
 author: Neo
-description: SpeedSMP - fragments uniquement lors des kills par un joueur.
+description: SpeedSMP - drops a toute mort et suivi global avec /seespeed.
 commands:
   speed:
     usage: /speed
   speeditem:
     usage: /speeditem [joueur] [quantite]
+  seespeed:
+    description: Liste les fragments de Speed au sol.
+    usage: /seespeed [page]
 permissions:
   speedsmp.admin:
+    default: op
+  speedsmp.seespeed:
     default: op
