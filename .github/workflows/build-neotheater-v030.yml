@@ -34,6 +34,7 @@ jobs:
           cat neotheater-v030/overlay.part00 neotheater-v030/overlay.part01 neotheater-v030/overlay.part02 neotheater-v030/overlay.part03 | base64 -d > /tmp/v03overlay.tar.gz
           tar -xzf /tmp/v03overlay.tar.gz -C neotheater-v030
           rm -f neotheater-v030/overlay.part00 neotheater-v030/overlay.part01 neotheater-v030/overlay.part02 neotheater-v030/overlay.part03
+          sed -i 's/import net.minecraft.world.level.Heightmap;/import net.minecraft.world.level.levelgen.Heightmap;/' neotheater-v030/src/main/java/fr/neo/neotheater/world/CapitalGenerator.java
 
       - name: Build mod
         working-directory: neotheater-v030
