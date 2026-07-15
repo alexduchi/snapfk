@@ -8,36 +8,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Unpack source
-        run: |
-          set -eux
-          cp SpeedSMP-1.0.3-source.zip source-current
-          for i in 1 2 3 4; do
-            if unzip -t source-current >/dev/null 2>&1; then
-              break
-            fi
-            base64 -d source-current > source-next
-            mv source-next source-current
-          done
-          unzip -q source-current -d project
-          test -f project/pom.xml
       - name: Set up Java 21
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
           cache: maven
-          cache-dependency-path: project/pom.xml
+          cache-dependency-path: speedsmp/pom.xml
       - name: Build against official Paper API
-        working-directory: project
+        working-directory: speedsmp
         run: mvn -B -U clean package
       - name: Inspect jar
         run: |
-          jar tf project/target/SpeedSMP-1.0.3.jar
-          test -f project/target/SpeedSMP-1.0.3.jar
+          jar tf speedsmp/target/SpeedSMP-1.0.3.jar
+          test -f speedsmp/target/SpeedSMP-1.0.3.jar
       - name: Upload jar
         uses: actions/upload-artifact@v4
         with:
           name: SpeedSMP-1.0.3
-          path: project/target/SpeedSMP-1.0.3.jar
+          path: speedsmp/target/SpeedSMP-1.0.3.jar
           if-no-files-found: error
