@@ -26,9 +26,9 @@ import java.io.*;
 import java.util.*;
 
 public final class SpeedSmpPlugin extends JavaPlugin implements Listener, CommandExecutor {
-    static final boolean DROP_ONLY_PLAYER_KILL=true;
-    static final boolean GLOBAL_TRACKER=false;
-    static final String FLAVOR="PvP Kill";
+    static final boolean DROP_ONLY_PLAYER_KILL=false;
+    static final boolean GLOBAL_TRACKER=true;
+    static final String FLAVOR="Global Death + Tracker";
     private static final int MIN=-3,MAX=3;
     private final Map<UUID,Integer> speed=new HashMap<>();
     private final Map<UUID,Combo> combos=new HashMap<>();
