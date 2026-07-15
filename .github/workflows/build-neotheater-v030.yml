@@ -38,15 +38,17 @@ jobs:
       - name: Build mod
         working-directory: neotheater-v030
         run: |
-          set +e
           gradle --stacktrace build > build.log 2>&1
-          code=$?
-          set -e
-          if [ "$code" -ne 0 ]; then
-            grep -nE "error:|FAILURE:|What went wrong|Compilation failed|Could not compile" build.log | tail -n 120 || true
-            tail -n 220 build.log
-            exit "$code"
-          fi
+
+      - name: Upload build diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: NeoTheaterWorldgen-0.3.0-build-diagnostics
+          path: |
+            neotheater-v030/build.log
+            neotheater-v030/src
+          if-no-files-found: error
 
       - name: Prepare dedicated-server smoke test
         working-directory: neotheater-v030
