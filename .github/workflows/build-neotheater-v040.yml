@@ -20,7 +20,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.10.2"
-      - name: Assemble verified V0.4 source
+      - name: Assemble V0.4 source
         run: |
           set -euo pipefail
           mkdir -p neotheater-v040
@@ -30,15 +30,18 @@ jobs:
           tar -xzf /tmp/v03.tar.gz -C neotheater-v040
           cat neotheater-v040/v04p_00 neotheater-v040/v04p_01 neotheater-v040/v04p_02 | base64 -d | gzip -d > /tmp/v04.patch
           cd neotheater-v040
-          patch --batch -p4 < /tmp/v04.patch || true
+          patch --batch -p4 < /tmp/v04.patch > patch.log 2>&1 || true
           sed -i 's/import net.minecraft.world.level.Heightmap;/import net.minecraft.world.level.levelgen.Heightmap;/' src/main/java/fr/neo/neotheater/world/CapitalGenerator.java
-          grep -F 'mod_version=0.4.0' gradle.properties
-          grep -F 'version="0.4.0"' src/main/resources/META-INF/neoforge.mods.toml
-          grep -F 'persistent inhabitants' src/main/java/fr/neo/neotheater/world/CapitalGenerator.java
-          grep -F 'Neo Theater Worldgen 0.4.0' src/main/java/fr/neo/neotheater/NeoTheater.java
+          cat patch.log
       - name: Build
         working-directory: neotheater-v040
         run: gradle --stacktrace build
+      - name: Verify V0.4 jar
+        working-directory: neotheater-v040
+        run: |
+          JAR=$(find build/libs -name '*.jar' | head -n1)
+          unzip -p "$JAR" META-INF/neoforge.mods.toml | grep -F 'version="0.4.0"'
+          javap -classpath "$JAR" -p fr.neo.neotheater.world.CapitalGenerator | grep -E 'populateCapital|spawnVillagers|buildInn|buildLibrary|buildWorkshop'
       - name: Smoke test dedicated server
         working-directory: neotheater-v040
         run: |
@@ -64,11 +67,10 @@ jobs:
           grep -F 'Neo Theater Worldgen 0.4.0' run/logs/latest.log
           if grep -E 'Failed to load datapacks|Registry loading errors|Exception in server tick loop|Failed to start the minecraft server' run/logs/latest.log; then exit 1; fi
           test "$code" -eq 0 -o "$code" -eq 124
-      - name: Verify jar metadata and package
+      - name: Package
         working-directory: neotheater-v040
         run: |
           JAR=$(find build/libs -name '*.jar' | head -n1)
-          unzip -p "$JAR" META-INF/neoforge.mods.toml | grep -F 'version="0.4.0"'
           zip -qr NeoTheaterWorldgen-0.4.0-sources.zip settings.gradle gradle.properties build.gradle README.md src
           sha256sum "$JAR" > NeoTheaterWorldgen-0.4.0-SHA256.txt
       - uses: actions/upload-artifact@v4
@@ -80,3 +82,4 @@ jobs:
             neotheater-v040/NeoTheaterWorldgen-0.4.0-SHA256.txt
             neotheater-v040/run/logs/latest.log
             neotheater-v040/smoke-test.log
+            neotheater-v040/patch.log
