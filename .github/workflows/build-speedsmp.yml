@@ -11,12 +11,15 @@ jobs:
       - name: Unpack source
         run: |
           set -eux
-          if unzip -t SpeedSMP-1.0.3-source.zip >/dev/null 2>&1; then
-            unzip -q SpeedSMP-1.0.3-source.zip -d project
-          else
-            base64 -d SpeedSMP-1.0.3-source.zip > source-real.zip
-            unzip -q source-real.zip -d project
-          fi
+          cp SpeedSMP-1.0.3-source.zip source-current
+          for i in 1 2 3 4; do
+            if unzip -t source-current >/dev/null 2>&1; then
+              break
+            fi
+            base64 -d source-current > source-next
+            mv source-next source-current
+          done
+          unzip -q source-current -d project
           test -f project/pom.xml
       - name: Set up Java 21
         uses: actions/setup-java@v4
