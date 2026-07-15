@@ -16,17 +16,23 @@ jobs:
           cache: maven
           cache-dependency-path: speedsmp/pom.xml
       - name: Build against official Paper API
+        id: build
+        continue-on-error: true
         working-directory: speedsmp
-        run: |
-          mvn -q -B -U clean package > /tmp/build.log 2>&1 || { tail -100 /tmp/build.log; exit 1; }
-          tail -20 /tmp/build.log || true
-      - name: Inspect jar
-        run: |
-          jar tf speedsmp/target/SpeedSMP-1.0.3.jar
-          test -f speedsmp/target/SpeedSMP-1.0.3.jar
+        run: mvn -B -U clean package > build.log 2>&1
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SpeedSMP-build-log
+          path: speedsmp/build.log
       - name: Upload jar
+        if: steps.build.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: SpeedSMP-1.0.3
           path: speedsmp/target/SpeedSMP-1.0.3.jar
           if-no-files-found: error
+      - name: Fail when compilation failed
+        if: steps.build.outcome != 'success'
+        run: exit 1
