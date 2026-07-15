@@ -3,6 +3,8 @@ name: Build NeoTheater Worldgen 0.2.0
 on:
   push:
     branches: ["neotheater-ci-v020"]
+  pull_request:
+    branches: ["main"]
   workflow_dispatch:
 
 jobs:
