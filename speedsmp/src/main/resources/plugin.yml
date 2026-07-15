@@ -1,0 +1,13 @@
+name: SpeedSMP
+version: '1.0.3'
+main: fr.neo.speedsmp.SpeedSmpPlugin
+api-version: '1.21.11'
+author: Neo
+commands:
+  speed:
+    usage: /speed
+  speeditem:
+    usage: /speeditem [joueur] [quantite]
+permissions:
+  speedsmp.admin:
+    default: op
