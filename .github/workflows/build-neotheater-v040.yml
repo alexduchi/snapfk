@@ -20,30 +20,27 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.10.2"
-      - name: Assemble V0.4 source
+      - name: Extract complete V0.4 source
         run: |
           set -euo pipefail
-          mkdir -p neotheater-v040
-          base64 -d neotheater-build/project.tar.gz.b64 > /tmp/base.tar.gz
-          tar -xzf /tmp/base.tar.gz -C neotheater-v040
-          cat neotheater-v030/overlay.part00 neotheater-v030/overlay.part01 neotheater-v030/overlay.part02 neotheater-v030/overlay.part03 | base64 -d > /tmp/v03.tar.gz
-          tar -xzf /tmp/v03.tar.gz -C neotheater-v040
-          cat neotheater-v040/v04p_00 neotheater-v040/v04p_01 neotheater-v040/v04p_02 | base64 -d | gzip -d > /tmp/v04.patch
-          cd neotheater-v040
-          patch --batch -p4 < /tmp/v04.patch > patch.log 2>&1 || true
-          sed -i 's/import net.minecraft.world.level.Heightmap;/import net.minecraft.world.level.levelgen.Heightmap;/' src/main/java/fr/neo/neotheater/world/CapitalGenerator.java
-          cat patch.log
+          mkdir -p neotheater-v040-build
+          cat neotheater-v040/full_00 neotheater-v040/full_01 neotheater-v040/full_02 neotheater-v040/full_03 | base64 -d > /tmp/neotheater-v040.tar.gz
+          tar -xzf /tmp/neotheater-v040.tar.gz -C neotheater-v040-build
+          grep -F 'mod_version=0.4.0' neotheater-v040-build/gradle.properties
+          grep -F 'version="0.4.0"' neotheater-v040-build/src/main/resources/META-INF/neoforge.mods.toml
+          grep -F 'persistent inhabitants' neotheater-v040-build/src/main/java/fr/neo/neotheater/world/CapitalGenerator.java
+          grep -F 'Neo Theater Worldgen 0.4.0' neotheater-v040-build/src/main/java/fr/neo/neotheater/NeoTheater.java
       - name: Build
-        working-directory: neotheater-v040
+        working-directory: neotheater-v040-build
         run: gradle --stacktrace build
       - name: Verify V0.4 jar
-        working-directory: neotheater-v040
+        working-directory: neotheater-v040-build
         run: |
           JAR=$(find build/libs -name '*.jar' | head -n1)
           unzip -p "$JAR" META-INF/neoforge.mods.toml | grep -F 'version="0.4.0"'
           javap -classpath "$JAR" -p fr.neo.neotheater.world.CapitalGenerator | grep -E 'populateCapital|spawnVillagers|buildInn|buildLibrary|buildWorkshop'
       - name: Smoke test dedicated server
-        working-directory: neotheater-v040
+        working-directory: neotheater-v040-build
         run: |
           mkdir -p run
           printf 'eula=true\n' > run/eula.txt
@@ -68,7 +65,7 @@ jobs:
           if grep -E 'Failed to load datapacks|Registry loading errors|Exception in server tick loop|Failed to start the minecraft server' run/logs/latest.log; then exit 1; fi
           test "$code" -eq 0 -o "$code" -eq 124
       - name: Package
-        working-directory: neotheater-v040
+        working-directory: neotheater-v040-build
         run: |
           JAR=$(find build/libs -name '*.jar' | head -n1)
           zip -qr NeoTheaterWorldgen-0.4.0-sources.zip settings.gradle gradle.properties build.gradle README.md src
@@ -77,9 +74,8 @@ jobs:
         with:
           name: NeoTheaterWorldgen-0.4.0-verified
           path: |
-            neotheater-v040/build/libs/*.jar
-            neotheater-v040/NeoTheaterWorldgen-0.4.0-sources.zip
-            neotheater-v040/NeoTheaterWorldgen-0.4.0-SHA256.txt
-            neotheater-v040/run/logs/latest.log
-            neotheater-v040/smoke-test.log
-            neotheater-v040/patch.log
+            neotheater-v040-build/build/libs/*.jar
+            neotheater-v040-build/NeoTheaterWorldgen-0.4.0-sources.zip
+            neotheater-v040-build/NeoTheaterWorldgen-0.4.0-SHA256.txt
+            neotheater-v040-build/run/logs/latest.log
+            neotheater-v040-build/smoke-test.log
