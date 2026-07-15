@@ -37,7 +37,16 @@ jobs:
 
       - name: Build mod
         working-directory: neotheater-v030
-        run: gradle --stacktrace build
+        run: |
+          set +e
+          gradle --stacktrace build > build.log 2>&1
+          code=$?
+          set -e
+          if [ "$code" -ne 0 ]; then
+            grep -nE "error:|FAILURE:|What went wrong|Compilation failed|Could not compile" build.log | tail -n 120 || true
+            tail -n 220 build.log
+            exit "$code"
+          fi
 
       - name: Prepare dedicated-server smoke test
         working-directory: neotheater-v030
@@ -93,5 +102,6 @@ jobs:
             neotheater-v030/build/libs/*.jar
             neotheater-v030/NeoTheaterWorldgen-0.3.0-sources.zip
             neotheater-v030/NeoTheaterWorldgen-0.3.0-SHA256.txt
+            neotheater-v030/build.log
             neotheater-v030/smoke-test.log
             neotheater-v030/run/logs/latest.log
