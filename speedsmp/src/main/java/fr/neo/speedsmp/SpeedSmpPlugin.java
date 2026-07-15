@@ -116,7 +116,7 @@ public final class SpeedSmpPlugin extends JavaPlugin implements Listener, Comman
         if(!s.hasPermission("speedsmp.admin")){s.sendMessage("§cPermission refusee.");return true;}Player p=s instanceof Player pl?pl:null;int amount=1;
         if(a.length>=1){try{amount=Integer.parseInt(a[0]);}catch(NumberFormatException ex){p=Bukkit.getPlayerExact(a[0]);}}
         if(a.length>=2)try{amount=Integer.parseInt(a[1]);}catch(NumberFormatException ignored){}
-        if(p==null){s.sendMessage("§cJoueur introuvable.");return true;}amount=Math.max(1,Math.min(64,amount));ItemStack it=createFragment();it.setAmount(amount);Map<Integer,ItemStack> left=p.getInventory().addItem(it);left.values().forEach(x->p.getWorld().dropItemNaturally(p.getLocation(),x));s.sendMessage("§a"+amount+" fragment(s) donne(s) a "+p.getName()+".");return true;
+        if(p==null){s.sendMessage("§cJoueur introuvable.");return true;}amount=Math.max(1,Math.min(64,amount));ItemStack it=createFragment();it.setAmount(amount);Map<Integer,ItemStack> left=p.getInventory().addItem(it);for(ItemStack remaining:left.values())p.getWorld().dropItemNaturally(p.getLocation(),remaining);s.sendMessage("§a"+amount+" fragment(s) donne(s) a "+p.getName()+".");return true;
     }
 
     private int getSpeed(Player p){return speed.getOrDefault(p.getUniqueId(),0);}private int setSpeed(Player p,int v){v=Math.max(MIN,Math.min(MAX,v));speed.put(p.getUniqueId(),v);save();return v;}
