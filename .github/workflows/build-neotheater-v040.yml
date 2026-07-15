@@ -35,7 +35,11 @@ jobs:
           tar -xzf /tmp/v03overlay.tar.gz -C neotheater-v040
           cat neotheater-v040/v04p_00 neotheater-v040/v04p_01 neotheater-v040/v04p_02 | base64 -d | gzip -d > /tmp/v04.patch
           cd neotheater-v040
-          patch --batch -p4 < /tmp/v04.patch
+          patch --batch -p4 < /tmp/v04.patch || true
+          sed -i 's/import net.minecraft.world.level.Heightmap;/import net.minecraft.world.level.levelgen.Heightmap;/' src/main/java/fr/neo/neotheater/world/CapitalGenerator.java
+          grep -F 'mod_version=0.4.0' gradle.properties
+          grep -F 'Neo Theater Worldgen 0.4.0' src/main/java/fr/neo/neotheater/NeoTheater.java
+          grep -F 'persistent inhabitants' src/main/java/fr/neo/neotheater/world/CapitalGenerator.java
           rm -f v04p_00 v04p_01 v04p_02
 
       - name: Build mod
