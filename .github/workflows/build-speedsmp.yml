@@ -17,7 +17,9 @@ jobs:
           cache-dependency-path: speedsmp/pom.xml
       - name: Build against official Paper API
         working-directory: speedsmp
-        run: mvn -q -B -U clean package
+        run: |
+          mvn -q -B -U clean package > /tmp/build.log 2>&1 || { tail -100 /tmp/build.log; exit 1; }
+          tail -20 /tmp/build.log || true
       - name: Inspect jar
         run: |
           jar tf speedsmp/target/SpeedSMP-1.0.3.jar
