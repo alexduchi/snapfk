@@ -28,6 +28,7 @@ jobs:
 
       - name: Extract V0.3 base and apply V0.4 patch
         run: |
+          set +e
           mkdir -p neotheater-v040
           base64 -d neotheater-build/project.tar.gz.b64 > /tmp/project.tar.gz
           tar -xzf /tmp/project.tar.gz -C neotheater-v040
@@ -35,9 +36,11 @@ jobs:
           tar -xzf /tmp/v03overlay.tar.gz -C neotheater-v040
           cat neotheater-v040/v04p_00 neotheater-v040/v04p_01 neotheater-v040/v04p_02 | base64 -d | gzip -d > /tmp/v04.patch
           cd neotheater-v040
-          patch --batch -p4 < /tmp/v04.patch || true
+          patch --batch -p4 < /tmp/v04.patch
           sed -i 's/import net.minecraft.world.level.Heightmap;/import net.minecraft.world.level.levelgen.Heightmap;/' src/main/java/fr/neo/neotheater/world/CapitalGenerator.java
           rm -f v04p_00 v04p_01 v04p_02
+          find . -maxdepth 3 -type f | sort
+          exit 0
 
       - name: Build mod
         working-directory: neotheater-v040
