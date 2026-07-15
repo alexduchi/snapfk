@@ -24,7 +24,8 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p neotheater-v040-build
-          cat neotheater-v040/full_00 neotheater-v040/full_01 neotheater-v040/full_02 neotheater-v040/full_03 | base64 -d > /tmp/neotheater-v040.tar.gz
+          cat neotheater-v040/full_00a neotheater-v040/full_00b neotheater-v040/full_01 neotheater-v040/full_02 neotheater-v040/full_03 | base64 -d > /tmp/neotheater-v040.tar.gz
+          echo '005eca29cbb5f143ba5ce6291912559d763ccecc2b735f732247d4aba9348618  /tmp/neotheater-v040.tar.gz' | sha256sum -c -
           tar -xzf /tmp/neotheater-v040.tar.gz -C neotheater-v040-build
           grep -F 'mod_version=0.4.0' neotheater-v040-build/gradle.properties
           grep -F 'version="0.4.0"' neotheater-v040-build/src/main/resources/META-INF/neoforge.mods.toml
