@@ -1,8 +1,9 @@
 name: SpeedSMP
-version: '1.0.3'
+version: '1.0.4-pvp'
 main: fr.neo.speedsmp.SpeedSmpPlugin
 api-version: '1.21.11'
 author: Neo
+description: SpeedSMP - fragments uniquement lors des kills par un joueur.
 commands:
   speed:
     usage: /speed
