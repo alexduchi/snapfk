@@ -9,7 +9,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Unpack source
-        run: unzip -q SpeedSMP-1.0.3-source.zip -d project
+        run: |
+          set -eux
+          if unzip -t SpeedSMP-1.0.3-source.zip >/dev/null 2>&1; then
+            unzip -q SpeedSMP-1.0.3-source.zip -d project
+          else
+            base64 -d SpeedSMP-1.0.3-source.zip > source-real.zip
+            unzip -q source-real.zip -d project
+          fi
+          test -f project/pom.xml
       - name: Set up Java 21
         uses: actions/setup-java@v4
         with:
