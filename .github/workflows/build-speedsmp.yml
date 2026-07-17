@@ -14,13 +14,25 @@ jobs:
           distribution: temurin
           java-version: '21'
       - name: Build against official Paper API
+        id: build
+        continue-on-error: true
         working-directory: speedsmp
         run: |
           rm -rf ~/.m2/repository/it/unimi/dsi/fastutil
-          mvn -B -U clean package > build.log 2>&1 || { grep -E "\[ERROR\]|COMPILATION ERROR" build.log | tail -80; exit 1; }
+          mvn -B -U clean package > build.log 2>&1
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SpeedSMP-1.0.5-build-log
+          path: speedsmp/build.log
       - name: Upload jar
+        if: steps.build.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: SpeedSMP-1.0.5-PvPKill
           path: speedsmp/target/SpeedSMP-1.0.5-PvPKill.jar
           if-no-files-found: error
+      - name: Fail build
+        if: steps.build.outcome != 'success'
+        run: exit 1
