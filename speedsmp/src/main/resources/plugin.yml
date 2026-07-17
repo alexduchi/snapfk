@@ -1,5 +1,5 @@
 name: SpeedSMP
-version: '1.0.4-pvp'
+version: '1.0.5-pvp'
 main: fr.neo.speedsmp.SpeedSmpPlugin
 api-version: '1.21.11'
 author: Neo
@@ -9,6 +9,9 @@ commands:
     usage: /speed
   speeditem:
     usage: /speeditem [joueur] [quantite]
+  withdraw:
+    description: Transforme ta Speed permanente en fragments.
+    usage: /withdraw [quantite]
 permissions:
   speedsmp.admin:
     default: op
