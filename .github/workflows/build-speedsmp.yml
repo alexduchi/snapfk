@@ -1,4 +1,4 @@
-name: Build SpeedSMP 1.0.4
+name: Build SpeedSMP 1.0.5 PvP
 on:
   pull_request:
   workflow_dispatch:
@@ -21,6 +21,6 @@ jobs:
       - name: Upload jar
         uses: actions/upload-artifact@v4
         with:
-          name: SpeedSMP-1.0.4-PvPKill
-          path: speedsmp/target/SpeedSMP-1.0.4-PvPKill.jar
+          name: SpeedSMP-1.0.5-PvPKill
+          path: speedsmp/target/SpeedSMP-1.0.5-PvPKill.jar
           if-no-files-found: error
