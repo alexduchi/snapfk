@@ -19,7 +19,7 @@
         android:fullBackupContent="false"
         android:icon="@drawable/ic_sentry"
         android:roundIcon="@drawable/ic_sentry"
-        android:label="Sentry 3.5"
+        android:label="Sentry 4"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.NoActionBar"
         android:usesCleartextTraffic="false">
@@ -27,8 +27,9 @@
         <activity android:name=".ProActivity" android:exported="false" />
         <activity android:name=".V2Activity" android:exported="false" />
         <activity android:name=".V3Activity" android:exported="false" />
+        <activity android:name=".V35Activity" android:exported="false" />
         <activity
-            android:name=".V35Activity"
+            android:name=".V4Activity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
