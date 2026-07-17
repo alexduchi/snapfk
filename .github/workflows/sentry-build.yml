@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - sentry-v1-20260717
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
