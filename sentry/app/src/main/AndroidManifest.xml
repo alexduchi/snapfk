@@ -17,13 +17,14 @@
         android:fullBackupContent="false"
         android:icon="@drawable/ic_sentry"
         android:roundIcon="@drawable/ic_sentry"
-        android:label="Sentry Pro"
+        android:label="Sentry"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.NoActionBar"
         android:usesCleartextTraffic="false">
         <activity android:name=".MainActivity" android:exported="false" />
+        <activity android:name=".ProActivity" android:exported="false" />
         <activity
-            android:name=".ProActivity"
+            android:name=".V2Activity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
