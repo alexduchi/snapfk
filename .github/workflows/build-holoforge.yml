@@ -37,22 +37,15 @@ jobs:
         with:
           gradle-version: '8.6'
 
-      - name: Prepare official ARCore project
+      - name: Prepare official ARCore sample
         run: |
-          set +e
-          python3 holoforge_v04/prepare_v04_safe.py > prepare-v04.log 2>&1
-          code=$?
-          cat prepare-v04.log
-          exit $code
-
-      - name: Upload preparation log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: HoloForgeAR-v0.4-prepare-log
-          path: prepare-v04.log
-          if-no-files-found: warn
-          retention-days: 3
+          rm -rf holoforge_v04_build arcore-android-sdk
+          git clone --depth 1 https://github.com/google-ar/arcore-android-sdk.git arcore-android-sdk
+          cp -R arcore-android-sdk/samples/hello_ar_java holoforge_v04_build
+          sed -i 's/com.google.ar.core.examples.java.helloar/com.neo.holoforge.ar/g' holoforge_v04_build/app/build.gradle
+          sed -i 's/HelloAR Java/HoloForge AR/g' holoforge_v04_build/app/src/main/res/values/strings.xml
+          sed -i "s/versionCode 1/versionCode 4/" holoforge_v04_build/app/build.gradle
+          sed -i "s/versionName '1.0'/versionName '0.4.0'/" holoforge_v04_build/app/build.gradle
 
       - name: Compile HoloForge AR v0.4
         run: |
