@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - sentry-v25.0-20260718
+  pull_request:
+    branches:
+      - sentry-v24.0-20260718
   workflow_dispatch:
 
 jobs:
@@ -20,13 +23,14 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-          cache: gradle
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
-      - name: Make Gradle executable
-        run: chmod +x gradlew
       - name: Build debug APK
-        run: ./gradlew assembleDebug --stacktrace
+        run: gradle assembleDebug --stacktrace
       - name: Rename APK
         run: cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/Sentry-v25.0.0.apk
       - name: Upload APK
