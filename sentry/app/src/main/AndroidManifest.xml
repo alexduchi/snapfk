@@ -13,13 +13,17 @@
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
 
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
+    <uses-feature android:name="android.hardware.wifi.rtt" android:required="false" />
+    <uses-feature android:name="android.hardware.uwb" android:required="false" />
+    <uses-feature android:name="android.hardware.nfc" android:required="false" />
+    <uses-feature android:glEsVersion="0x00020000" android:required="false" />
 
     <application
         android:allowBackup="false"
         android:fullBackupContent="false"
         android:icon="@drawable/ic_sentry"
         android:roundIcon="@drawable/ic_sentry"
-        android:label="Sentry 4"
+        android:label="Sentry 14"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.NoActionBar"
         android:usesCleartextTraffic="false">
@@ -28,8 +32,13 @@
         <activity android:name=".V2Activity" android:exported="false" />
         <activity android:name=".V3Activity" android:exported="false" />
         <activity android:name=".V35Activity" android:exported="false" />
+        <activity android:name=".V4Activity" android:exported="false" />
+        <activity android:name=".V10Activity" android:exported="false" />
+        <activity android:name=".V11Activity" android:exported="false" />
+        <activity android:name=".V12Activity" android:exported="false" />
+        <activity android:name=".V13Activity" android:exported="false" />
         <activity
-            android:name=".V4Activity"
+            android:name=".V14Activity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
