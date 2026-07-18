@@ -23,7 +23,8 @@ jobs:
       - name: Extract source
         run: |
           mkdir -p holoforge_v03
-          cat .holoforge/v03.part* | tr -d '\r\n' | base64 -d > /tmp/holoforge-v03.tar.gz
+          cat .holoforge/v03clean.part* | tr -d '\r\n' | base64 -d > /tmp/holoforge-v03.tar.gz
+          echo "6716fef4ac2842c60d28de1b255fb3d00461c24acfee2d4ee942a29a177a8004  /tmp/holoforge-v03.tar.gz" | sha256sum -c -
           gzip -t /tmp/holoforge-v03.tar.gz
           tar -xzf /tmp/holoforge-v03.tar.gz -C holoforge_v03
           test -f holoforge_v03/app/src/main/AndroidManifest.xml
