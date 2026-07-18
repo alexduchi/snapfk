@@ -67,11 +67,7 @@ public class OpticalScannerActivity extends Activity implements SurfaceHolder.Ca
         setContentView(root);
     }
 
-    @Override protected void onPause() {
-        stopCamera();
-        super.onPause();
-    }
-
+    @Override protected void onPause() { stopCamera(); super.onPause(); }
     @Override public void surfaceCreated(SurfaceHolder holder) { startCamera(holder); }
     @Override public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) { restartPreview(holder); }
     @Override public void surfaceDestroyed(SurfaceHolder holder) { stopCamera(); }
@@ -156,10 +152,15 @@ public class OpticalScannerActivity extends Activity implements SurfaceHolder.Ca
         float ny = maxY / (float)frameHeight;
         boolean hotspot = max >= 238 && max > avg + 45;
         overlay.update(nx, ny, hotspot, max, avg, flicker.frequency, flicker.confidence);
+
+        final int shownMax = max;
+        final boolean shownHotspot = hotspot;
+        final float shownFrequency = flicker.frequency;
+        final int shownConfidence = flicker.confidence;
         ui.post(() -> {
-            String point = hotspot ? "Point lumineux détecté" : "Aucun point lumineux net";
-            String freq = flicker.frequency > 0 ? String.format(Locale.FRANCE, " · scintillement ≈ %.1f Hz", flicker.frequency) : "";
-            status.setText(point + " · pic " + max + "/255" + freq + "\nConfiance scintillement " + flicker.confidence + "% · résultat dépendant de la caméra");
+            String point = shownHotspot ? "Point lumineux détecté" : "Aucun point lumineux net";
+            String freq = shownFrequency > 0 ? String.format(Locale.FRANCE, " · scintillement ≈ %.1f Hz", shownFrequency) : "";
+            status.setText(point + " · pic " + shownMax + "/255" + freq + "\nConfiance scintillement " + shownConfidence + "% · résultat dépendant de la caméra");
         });
     }
 
