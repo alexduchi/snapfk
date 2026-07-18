@@ -7,6 +7,9 @@
     <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES" android:usesPermissionFlags="neverForLocation" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="32" />
@@ -19,6 +22,8 @@
     <uses-feature android:name="android.hardware.wifi.rtt" android:required="false" />
     <uses-feature android:name="android.hardware.uwb" android:required="false" />
     <uses-feature android:name="android.hardware.nfc" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.any" android:required="false" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
     <uses-feature android:glEsVersion="0x00020000" android:required="false" />
 
     <application
@@ -26,7 +31,7 @@
         android:fullBackupContent="false"
         android:icon="@drawable/ic_sentry"
         android:roundIcon="@drawable/ic_sentry"
-        android:label="Sentry 21"
+        android:label="Sentry 22"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.NoActionBar"
         android:usesCleartextTraffic="false">
@@ -43,8 +48,10 @@
         <activity android:name=".V14Activity" android:exported="false" />
         <activity android:name=".V15Activity" android:exported="false" />
         <activity android:name=".V20Activity" android:exported="false" />
+        <activity android:name=".V21Activity" android:exported="false" />
+        <activity android:name=".OpticalScannerActivity" android:exported="false" android:screenOrientation="portrait" />
         <activity
-            android:name=".V21Activity"
+            android:name=".V22Activity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
