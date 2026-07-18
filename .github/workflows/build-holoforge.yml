@@ -1,0 +1,70 @@
+name: Build HoloForge AR APK
+
+on:
+  push:
+    branches:
+      - agent/holoforge-ar-build
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract HoloForge source
+        run: |
+          mkdir -p holoforge_build
+          cat .holoforge/project.b64.part* | base64 -d > /tmp/holoforge-src.tar.gz
+          tar -xzf /tmp/holoforge-src.tar.gz -C holoforge_build
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('holoforge_build/app/src/main/java/com/neo/holoforge/MainActivity.java')
+          s = p.read_text()
+          s = s.replace('renderer.setSession(session);\n            updateRotation();', 'renderer.setSession(session);\n            session.resume();\n            surfaceView.onResume();\n            updateRotation();')
+          s = s.replace('createSessionIfNeeded();\n            onResume();', 'createSessionIfNeeded();')
+          p.write_text(s)
+          PY
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android platform
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Download MediaPipe hand model
+        run: |
+          mkdir -p holoforge_build/app/src/main/assets
+          curl --fail --location --retry 3 \
+            --output holoforge_build/app/src/main/assets/hand_landmarker.task \
+            https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task
+
+      - name: Build debug APK
+        run: cd holoforge_build && gradle :app:assembleDebug --stacktrace
+
+      - name: Prepare artifact
+        run: cp holoforge_build/app/build/outputs/apk/debug/app-debug.apk HoloForgeAR-v0.1.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: HoloForgeAR-APK
+          path: HoloForgeAR-v0.1.apk
+          if-no-files-found: error
+          retention-days: 14
