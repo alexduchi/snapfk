@@ -48,8 +48,6 @@ jobs:
           sed -i "s/versionName '1.0'/versionName '0.4.0'/" holoforge_v04_build/app/build.gradle
 
       - name: Compile HoloForge AR v0.4
-        id: compile
-        continue-on-error: true
         run: |
           set -o pipefail
           cd holoforge_v04_build
@@ -63,10 +61,6 @@ jobs:
           path: holoforge-v04-gradle.log
           if-no-files-found: warn
           retention-days: 3
-
-      - name: Stop after compile failure
-        if: steps.compile.outcome == 'failure'
-        run: exit 1
 
       - name: Verify APK structure and signature
         run: |
