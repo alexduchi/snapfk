@@ -49,7 +49,6 @@ def main() -> None:
     strings = BUILD_DIR / "app/src/main/res/values/strings.xml"
     text = strings.read_text(encoding="utf-8")
     text = text.replace("HelloAR Java", "HoloForge AR")
-    text = text.replace("Searching for surfaces...", "Recherche des surfaces…")
     strings.write_text(text, encoding="utf-8")
 
     layout = BUILD_DIR / "app/src/main/res/layout/activity_main.xml"
@@ -125,6 +124,7 @@ def main() -> None:
     '''), encoding="utf-8")
 
     drawable = BUILD_DIR / "app/src/main/res/drawable"
+    drawable.mkdir(parents=True, exist_ok=True)
     (drawable / "hud_panel.xml").write_text('''<?xml version="1.0" encoding="utf-8"?>
 <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
   <solid android:color="#D9142530" />
@@ -149,6 +149,7 @@ def main() -> None:
 </layer-list>''', encoding="utf-8")
 
     models = BUILD_DIR / "app/src/main/assets/models"
+    models.mkdir(parents=True, exist_ok=True)
     (models / "pawn.obj").write_text(textwrap.dedent('''\
         o HoloCube
         v -0.05 0.00  0.05
