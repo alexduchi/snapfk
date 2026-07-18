@@ -8,10 +8,10 @@ android {
 
     defaultConfig {
         applicationId 'com.sentry.local'
-        minSdk 26
+        minSdk 23
         targetSdk 36
-        versionCode 7
-        versionName '4.0.0'
+        versionCode 11
+        versionName '11.0.0'
     }
 
     buildTypes {
