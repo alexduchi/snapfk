@@ -10,8 +10,8 @@ android {
         applicationId 'com.sentry.local'
         minSdk 23
         targetSdk 36
-        versionCode 221
-        versionName '22.1.0'
+        versionCode 222
+        versionName '22.2.0'
     }
 
     buildTypes {
