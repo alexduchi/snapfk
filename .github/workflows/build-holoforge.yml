@@ -24,8 +24,9 @@ jobs:
         run: |
           rm -rf holoforge_build
           mkdir -p holoforge_build
-          cat .holoforge/v03.part* | base64 -d > /tmp/holoforge-v03-src.tar.gz
-          echo "6716fef4ac2842c60d28de1b255fb3d00461c24acfee2d4ee942a29a177a8004  /tmp/holoforge-v03-src.tar.gz" | sha256sum -c -
+          cat .holoforge/v03.part* | tr -d '\r\n' | base64 -d > /tmp/holoforge-v03-src.tar.gz
+          sha256sum /tmp/holoforge-v03-src.tar.gz
+          tar -tzf /tmp/holoforge-v03-src.tar.gz | head -40
           tar -xzf /tmp/holoforge-v03-src.tar.gz -C holoforge_build
 
       - name: Set up Java 17
