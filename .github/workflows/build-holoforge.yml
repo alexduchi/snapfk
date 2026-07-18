@@ -38,7 +38,21 @@ jobs:
           gradle-version: '8.6'
 
       - name: Prepare official ARCore project
-        run: python3 holoforge_v04/prepare_v04_safe.py
+        run: |
+          set +e
+          python3 holoforge_v04/prepare_v04_safe.py > prepare-v04.log 2>&1
+          code=$?
+          cat prepare-v04.log
+          exit $code
+
+      - name: Upload preparation log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: HoloForgeAR-v0.4-prepare-log
+          path: prepare-v04.log
+          if-no-files-found: warn
+          retention-days: 3
 
       - name: Compile HoloForge AR v0.4
         run: |
