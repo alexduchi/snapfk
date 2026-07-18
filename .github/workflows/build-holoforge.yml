@@ -38,24 +38,7 @@ jobs:
           gradle-version: '8.6'
 
       - name: Prepare official ARCore project
-        id: prepare
-        continue-on-error: true
-        run: |
-          set -o pipefail
-          python3 holoforge_v04/prepare_v04.py 2>&1 | tee holoforge-v04-prepare.log
-
-      - name: Upload preparation log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: HoloForgeAR-v0.4-prepare-log
-          path: holoforge-v04-prepare.log
-          if-no-files-found: error
-          retention-days: 14
-
-      - name: Stop after preparation failure
-        if: steps.prepare.outcome == 'failure'
-        run: exit 1
+        run: python3 holoforge_v04/prepare_v04_safe.py
 
       - name: Compile HoloForge AR v0.4
         run: |
