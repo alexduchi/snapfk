@@ -40,12 +40,32 @@ jobs:
       - name: Prepare official ARCore sample
         run: |
           rm -rf holoforge_v04_build arcore-android-sdk
-          git clone --depth 1 https://github.com/google-ar/arcore-android-sdk.git arcore-android-sdk
+          git clone --depth 1 --branch 1.54.0 https://github.com/google-ar/arcore-android-sdk.git arcore-android-sdk
           cp -R arcore-android-sdk/samples/hello_ar_java holoforge_v04_build
-          sed -i 's/com.google.ar.core.examples.java.helloar/com.neo.holoforge.ar/g' holoforge_v04_build/app/build.gradle
-          sed -i 's/HelloAR Java/HoloForge AR/g' holoforge_v04_build/app/src/main/res/values/strings.xml
-          sed -i "s/versionCode 1/versionCode 4/" holoforge_v04_build/app/build.gradle
-          sed -i "s/versionName '1.0'/versionName '0.4.0'/" holoforge_v04_build/app/build.gradle
+          python3 - <<'PY'
+          from pathlib import Path
+
+          gradle = Path('holoforge_v04_build/app/build.gradle')
+          text = gradle.read_text()
+          text = text.replace(
+              'applicationId "com.google.ar.core.examples.java.helloar"',
+              'applicationId "com.neo.holoforge.ar"',
+          )
+          text = text.replace('versionCode 1', 'versionCode 4')
+          text = text.replace("versionName '1.0'", "versionName '0.4.0'")
+          gradle.write_text(text)
+
+          manifest = Path('holoforge_v04_build/app/src/main/AndroidManifest.xml')
+          text = manifest.read_text()
+          text = text.replace(
+              '\n    package="com.google.ar.core.examples.java.helloar">',
+              '>',
+          )
+          manifest.write_text(text)
+
+          strings = Path('holoforge_v04_build/app/src/main/res/values/strings.xml')
+          strings.write_text(strings.read_text().replace('HelloAR Java', 'HoloForge AR'))
+          PY
 
       - name: Compile HoloForge AR v0.4
         run: |
