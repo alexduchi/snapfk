@@ -15,7 +15,7 @@ permissions:
 jobs:
   build-apk:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 40
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -37,66 +37,45 @@ jobs:
         with:
           gradle-version: '8.6'
 
-      - name: Prepare official ARCore sample
-        run: |
-          rm -rf holoforge_v04_build arcore-android-sdk
-          git clone --depth 1 --branch 1.54.0 https://github.com/google-ar/arcore-android-sdk.git arcore-android-sdk
-          cp -R arcore-android-sdk/samples/hello_ar_java holoforge_v04_build
-          python3 - <<'PY'
-          from pathlib import Path
+      - name: Prepare HoloForge v0.5
+        run: python3 holoforge_v05/prepare_v05.py
 
-          gradle = Path('holoforge_v04_build/app/build.gradle')
-          text = gradle.read_text()
-          text = text.replace(
-              'applicationId "com.google.ar.core.examples.java.helloar"',
-              'applicationId "com.neo.holoforge.ar"',
-          )
-          text = text.replace('versionCode 1', 'versionCode 4')
-          text = text.replace("versionName '1.0'", "versionName '0.4.0'")
-          gradle.write_text(text)
-
-          manifest = Path('holoforge_v04_build/app/src/main/AndroidManifest.xml')
-          text = manifest.read_text()
-          text = text.replace(
-              '\n    package="com.google.ar.core.examples.java.helloar">',
-              '>',
-          )
-          manifest.write_text(text)
-
-          strings = Path('holoforge_v04_build/app/src/main/res/values/strings.xml')
-          strings.write_text(strings.read_text().replace('HelloAR Java', 'HoloForge AR'))
-          PY
-
-      - name: Compile HoloForge AR v0.4
+      - name: Compile HoloForge AR v0.5
+        id: compile
+        continue-on-error: true
         run: |
           set -o pipefail
-          cd holoforge_v04_build
-          gradle clean :app:assembleDebug --stacktrace 2>&1 | tee ../holoforge-v04-gradle.log
+          cd holoforge_v05_build
+          gradle clean :app:assembleDebug --stacktrace 2>&1 | tee ../holoforge-v05-gradle.log
 
       - name: Upload Gradle log
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: HoloForgeAR-v0.4-gradle-log
-          path: holoforge-v04-gradle.log
+          name: HoloForgeAR-v0.5-gradle-log
+          path: holoforge-v05-gradle.log
           if-no-files-found: warn
           retention-days: 3
 
+      - name: Stop after compile failure
+        if: steps.compile.outcome == 'failure'
+        run: exit 1
+
       - name: Verify APK structure and signature
         run: |
-          APK=holoforge_v04_build/app/build/outputs/apk/debug/app-debug.apk
+          APK=holoforge_v05_build/app/build/outputs/apk/debug/app-debug.apk
           test -s "$APK"
           $ANDROID_HOME/build-tools/36.0.0/aapt dump badging "$APK"
           $ANDROID_HOME/build-tools/36.0.0/apksigner verify --verbose --print-certs "$APK"
-          cp "$APK" HoloForgeAR-v0.4-official-arcore.apk
-          sha256sum HoloForgeAR-v0.4-official-arcore.apk > HoloForgeAR-v0.4-official-arcore.apk.sha256
+          cp "$APK" HoloForgeAR-v0.5-iron-axis.apk
+          sha256sum HoloForgeAR-v0.5-iron-axis.apk > HoloForgeAR-v0.5-iron-axis.apk.sha256
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: HoloForgeAR-v0.4-official-ARCore-APK
+          name: HoloForgeAR-v0.5-Iron-Axis-APK
           path: |
-            HoloForgeAR-v0.4-official-arcore.apk
-            HoloForgeAR-v0.4-official-arcore.apk.sha256
+            HoloForgeAR-v0.5-iron-axis.apk
+            HoloForgeAR-v0.5-iron-axis.apk.sha256
           if-no-files-found: error
           retention-days: 14
