@@ -50,9 +50,10 @@
         <activity android:name=".V20Activity" android:exported="false" />
         <activity android:name=".V21Activity" android:exported="false" />
         <activity android:name=".V22Activity" android:exported="false" />
+        <activity android:name=".V221Activity" android:exported="false" />
         <activity android:name=".OpticalScannerActivity" android:exported="false" android:screenOrientation="portrait" />
         <activity
-            android:name=".V221Activity"
+            android:name=".V222Activity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
