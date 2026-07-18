@@ -10,6 +10,16 @@ on:
       - sentry-v3.0-20260717
       - sentry-v3.5-20260717
       - sentry-v4.0-20260717
+      - sentry-v10.0-20260718
+      - sentry-v11.0-20260718
+      - sentry-v12.0-20260718
+      - sentry-v13.0-20260718
+      - sentry-v14.0-20260718
+      - sentry-v15.0-20260718
+      - sentry-v20.0-20260718
+      - sentry-v21.0-20260718
+      - sentry-v22.0-20260718
+      - sentry-v22.1-20260718
   pull_request:
     branches:
       - main
@@ -34,12 +44,34 @@ jobs:
           gradle-version: '8.11.1'
 
       - name: Build debug APK
+        id: build
+        continue-on-error: true
         working-directory: sentry
-        run: gradle :app:assembleDebug --stacktrace
+        run: |
+          set +e
+          gradle :app:assembleDebug --stacktrace --console=plain > build.log 2>&1
+          code=$?
+          grep -n -E "error:|FAILURE:|What went wrong|Caused by:" build.log > build-errors.txt || true
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Upload build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Sentry-v22.1-build-diagnostics
+          path: |
+            sentry/build.log
+            sentry/build-errors.txt
+          if-no-files-found: warn
+
+      - name: Fail unsuccessful build
+        if: steps.build.outputs.exit_code != '0'
+        run: exit 1
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Sentry-v4.0.0-debug
+          name: Sentry-v22.1.0-debug
           path: sentry/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
