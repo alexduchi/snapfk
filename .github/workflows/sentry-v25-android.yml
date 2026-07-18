@@ -23,24 +23,14 @@ jobs:
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.9'
+          gradle-version: '8.11.1'
       - uses: android-actions/setup-android@v3
       - name: Build debug APK
-        run: |
-          set +e
-          gradle --no-daemon assembleDebug > build-v25.log 2>&1
-          echo $? > build-v25.exit
-          exit 0
-      - name: Rename APK when available
-        run: |
-          if [ -f app/build/outputs/apk/debug/app-debug.apk ]; then
-            cp app/build/outputs/apk/debug/app-debug.apk Sentry-v25.0.0.apk
-          fi
+        run: gradle --no-daemon assembleDebug
+      - name: Rename APK
+        run: cp app/build/outputs/apk/debug/app-debug.apk Sentry-v25.0.0.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: Sentry-v25-build-output
-          path: |
-            sentry/build-v25.log
-            sentry/build-v25.exit
-            sentry/Sentry-v25.0.0.apk
+          name: Sentry-v25.0.0-debug
+          path: sentry/Sentry-v25.0.0.apk
           if-no-files-found: error
