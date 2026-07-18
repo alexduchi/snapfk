@@ -20,15 +20,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Rebuild clean HoloForge v0.3 source
-        run: |
-          rm -rf holoforge_build
-          mkdir -p holoforge_build
-          cat .holoforge/v03.part* | tr -d '\r\n' | base64 -d > /tmp/holoforge-v03-src.tar.gz
-          sha256sum /tmp/holoforge-v03-src.tar.gz
-          tar -tzf /tmp/holoforge-v03-src.tar.gz | head -40
-          tar -xzf /tmp/holoforge-v03-src.tar.gz -C holoforge_build
-
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
@@ -48,12 +39,12 @@ jobs:
 
       - name: Compile clean diagnostic APK
         run: |
-          cd holoforge_build
+          cd holoforge_v03
           gradle clean :app:assembleDebug --stacktrace
 
       - name: Verify APK structure and signature
         run: |
-          APK=holoforge_build/app/build/outputs/apk/debug/app-debug.apk
+          APK=holoforge_v03/app/build/outputs/apk/debug/app-debug.apk
           test -s "$APK"
           $ANDROID_HOME/build-tools/35.0.0/aapt dump badging "$APK"
           $ANDROID_HOME/build-tools/35.0.0/apksigner verify --verbose --print-certs "$APK"
