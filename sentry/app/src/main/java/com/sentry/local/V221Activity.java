@@ -17,17 +17,14 @@ import android.widget.Toast;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 
-/** Sentry v22.1: compact navigation that replaces the inherited six-button bar. */
+/** Sentry v22.2: simplified navigation with direct access to major spaces. */
 public class V221Activity extends V22Activity {
     private static final int BG = Color.rgb(2, 8, 12);
-    private static final int PANEL = Color.rgb(10, 26, 32);
     private static final int MUTED = Color.rgb(126, 163, 172);
-    private static final int TEXT = Color.rgb(239, 253, 255);
     private static final int CYAN = Color.rgb(61, 235, 211);
 
     private final Handler compactUi = new Handler(Looper.getMainLooper());
     private LinearLayout compactNav;
-    private int activeTab;
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
@@ -45,7 +42,8 @@ public class V221Activity extends V22Activity {
             LinearLayout legacy = privateField(V4Activity.class, "nav", LinearLayout.class);
             if (legacy != null) legacy.setVisibility(View.GONE);
             if (compactNav == null || compactNav.getParent() == null) installCompactNavigation();
-            replaceExact(getWindow().getDecorView(), "S22", "S22.1");
+            replaceExact(getWindow().getDecorView(), "S22", "S22.2");
+            replaceExact(getWindow().getDecorView(), "S22.1", "S22.2");
             compactUi.postDelayed(this, 450);
         }
     };
@@ -67,8 +65,8 @@ public class V221Activity extends V22Activity {
         compactNav.setBackgroundColor(BG);
 
         addTab("RÉALITÉ", 0, () -> invokePrivate(V22Activity.class, "showRealityHub"));
-        addTab("DÉTECTER", 1, this::showDetectionMenu);
-        addTab("CARTE", 2, () -> invokePrivate(V22Activity.class, "showRealityMap"));
+        addTab("CENTRE", 1, () -> invokePrivate(V20Activity.class, "showCommandCenter"));
+        addTab("UNIVERS", 2, () -> invokeV4Tab(0));
         addTab("PLUS", 3, this::showMoreMenu);
 
         int legacyIndex = parent.indexOfChild(legacy);
@@ -92,7 +90,6 @@ public class V221Activity extends V22Activity {
     }
 
     private void setActive(int index) {
-        activeTab = index;
         if (compactNav == null) return;
         for (int i = 0; i < compactNav.getChildCount(); i++) {
             TextView item = (TextView) compactNav.getChildAt(i);
@@ -102,58 +99,21 @@ public class V221Activity extends V22Activity {
         }
     }
 
-    private void showDetectionMenu() {
-        String[] items = {
-                "Fusion réalité 360°",
-                "HyperTrack Bluetooth",
-                "Radar magnétique",
-                "Vision des vibrations",
-                "Sonar expérimental",
-                "Scanner optique"
-        };
-        new AlertDialog.Builder(this)
-                .setTitle("Détection")
-                .setItems(items, (d, which) -> {
-                    if (which == 0) invokeDirectional(2);
-                    else if (which == 1) invokePrivate(V21Activity.class, "showPicker");
-                    else if (which == 2) invokeDirectional(1);
-                    else if (which == 3) invokePrivate(V22Activity.class, "showVibrationLab");
-                    else if (which == 4) invokePrivate(V22Activity.class, "requestEchoLab");
-                    else invokePrivate(V22Activity.class, "requestOpticalScanner");
-                })
-                .setNegativeButton("Fermer", null)
-                .show();
-    }
-
     private void showMoreMenu() {
         String[] items = {
-                "Centre de commandement",
                 "Capacités du téléphone",
                 "Carte de signal",
-                "Univers spatial classique",
                 "Réglages HyperTrack"
         };
         new AlertDialog.Builder(this)
                 .setTitle("Plus d’outils")
                 .setItems(items, (d, which) -> {
-                    if (which == 0) invokePrivate(V20Activity.class, "showCommandCenter");
-                    else if (which == 1) invokePrivate(V22Activity.class, "showHardwareCapabilities");
-                    else if (which == 2) invokePrivate(V14Activity.class, "showWifiHeatmap");
-                    else if (which == 3) invokeV4Tab(0);
+                    if (which == 0) invokePrivate(V22Activity.class, "showHardwareCapabilities");
+                    else if (which == 1) invokePrivate(V14Activity.class, "showWifiHeatmap");
                     else invokePrivate(V21Activity.class, "showPrecisionSettings");
                 })
                 .setNegativeButton("Fermer", null)
                 .show();
-    }
-
-    private void invokeDirectional(int mode) {
-        try {
-            Method m = V22Activity.class.getDeclaredMethod("showDirectionalLab", int.class);
-            m.setAccessible(true);
-            m.invoke(this, mode);
-        } catch (Exception e) {
-            toast("Module momentanément indisponible.");
-        }
     }
 
     private void invokeV4Tab(int tab) {
