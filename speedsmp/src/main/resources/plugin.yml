@@ -1,0 +1,19 @@
+name: SpeedSMP
+version: '1.0.4-global-public'
+main: fr.neo.speedsmp.SpeedSmpPlugin
+api-version: '1.21.11'
+author: Neo
+description: SpeedSMP - suivi global public avec /seespeed sans teleportation.
+commands:
+  speed:
+    usage: /speed
+  speeditem:
+    usage: /speeditem [joueur] [quantite]
+  seespeed:
+    description: Liste publiquement les fragments de Speed au sol.
+    usage: /seespeed [page]
+permissions:
+  speedsmp.admin:
+    default: op
+  speedsmp.seespeed:
+    default: true
