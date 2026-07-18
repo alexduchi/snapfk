@@ -54,11 +54,22 @@ public class EmergencyVpnService extends VpnService {
 
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
         String action = intent == null ? null : intent.getAction();
-        if (ACTION_STOP.equals(action) || !isRequested(this)) {
+        if (ACTION_STOP.equals(action)) {
             shutdown();
             return START_NOT_STICKY;
         }
-        if (!ACTION_START.equals(action)) {
+        if (intent == null) {
+            shutdown();
+            return START_NOT_STICKY;
+        }
+        if (action == null) {
+            // Compatibility with v20-v23 buttons. A real service start means activation.
+            getSharedPreferences(PREFS, MODE_PRIVATE).edit().putBoolean(KEY_REQUESTED, true).commit();
+        } else if (!ACTION_START.equals(action)) {
+            shutdown();
+            return START_NOT_STICKY;
+        }
+        if (!isRequested(this)) {
             shutdown();
             return START_NOT_STICKY;
         }
