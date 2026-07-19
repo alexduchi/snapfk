@@ -33,16 +33,11 @@ def main() -> None:
 
     layout_path = OUT / "app/src/main/res/layout/activity_main.xml"
     layout = layout_path.read_text()
-    status_block = '''            <TextView
-                android:id="@+id/axis_status"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="5dp"
-                android:text="Scanne la pièce puis touche une surface"
-                android:textColor="#B5CAD5"
-                android:textSize="13sp" />'''
-    mode_row = status_block + '''
+    marker = '''          </LinearLayout>
 
+          <View
+              android:layout_width="38dp"'''
+    mode_row = '''
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="42dp"
@@ -56,8 +51,12 @@ def main() -> None:
                   android:id="@+id/mode_one_hand"
                   style="@style/HoloAxisButton"
                   android:text="UNE MAIN" />
-            </LinearLayout>'''
-    layout = replace_once(layout, status_block, mode_row, "manual control mode row")
+            </LinearLayout>
+          </LinearLayout>
+
+          <View
+              android:layout_width="38dp"'''
+    layout = replace_once(layout, marker, mode_row, "manual control mode row")
     layout_path.write_text(layout)
 
     shader_path = OUT / "app/src/main/assets/shaders/hologram.frag"
@@ -88,8 +87,6 @@ def main() -> None:
           color += base * grid * 0.38;
           color *= pulse;
           color = clamp(color, 0.0, 1.0);
-
-          // Opaque output on purpose: this is the reliable visibility pass for v0.6.
           o_FragColor = vec4(color, 1.0);
         }
     '''))
@@ -182,14 +179,11 @@ def main() -> None:
     source = source.replace('0.026f, 0.42f, 0.026f,', '0.035f, 0.52f, 0.035f,')
     source = source.replace('0.026f, 0.026f, 0.42f,', '0.035f, 0.035f, 0.52f,')
 
-    # Disable depth occlusion in the reliability build. It remains available later,
-    # but cannot hide the first visible object in v0.6.
     source = source.replace(
         'backgroundRenderer.setUseOcclusion(render, depthSettings.useDepthForOcclusion());',
         'backgroundRenderer.setUseOcclusion(render, false);',
     )
 
-    # Make placement confirmation explicit on screen.
     source = source.replace(
         '          updateHud();\n'
         '          // For devices that support the Depth API, shows a dialog to suggest enabling',
