@@ -37,23 +37,23 @@ jobs:
         with:
           gradle-version: '8.6'
 
-      - name: Prepare HoloForge v0.5
-        run: python3 holoforge_v05/prepare_v05.py
+      - name: Prepare HoloForge v0.6
+        run: python3 holoforge_v06/prepare_v06.py
 
-      - name: Compile HoloForge AR v0.5
+      - name: Compile HoloForge AR v0.6
         id: compile
         continue-on-error: true
         run: |
           set -o pipefail
-          cd holoforge_v05_build
-          gradle clean :app:assembleDebug --stacktrace 2>&1 | tee ../holoforge-v05-gradle.log
+          cd holoforge_v06_build
+          gradle clean :app:assembleDebug --stacktrace 2>&1 | tee ../holoforge-v06-gradle.log
 
       - name: Upload Gradle log
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: HoloForgeAR-v0.5-gradle-log
-          path: holoforge-v05-gradle.log
+          name: HoloForgeAR-v0.6-gradle-log
+          path: holoforge-v06-gradle.log
           if-no-files-found: warn
           retention-days: 3
 
@@ -63,19 +63,19 @@ jobs:
 
       - name: Verify APK structure and signature
         run: |
-          APK=holoforge_v05_build/app/build/outputs/apk/debug/app-debug.apk
+          APK=holoforge_v06_build/app/build/outputs/apk/debug/app-debug.apk
           test -s "$APK"
           $ANDROID_HOME/build-tools/36.0.0/aapt dump badging "$APK"
           $ANDROID_HOME/build-tools/36.0.0/apksigner verify --verbose --print-certs "$APK"
-          cp "$APK" HoloForgeAR-v0.5-iron-axis.apk
-          sha256sum HoloForgeAR-v0.5-iron-axis.apk > HoloForgeAR-v0.5-iron-axis.apk.sha256
+          cp "$APK" HoloForgeAR-v0.6-visible-manual-modes.apk
+          sha256sum HoloForgeAR-v0.6-visible-manual-modes.apk > HoloForgeAR-v0.6-visible-manual-modes.apk.sha256
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: HoloForgeAR-v0.5-Iron-Axis-APK
+          name: HoloForgeAR-v0.6-Visible-Manual-Modes-APK
           path: |
-            HoloForgeAR-v0.5-iron-axis.apk
-            HoloForgeAR-v0.5-iron-axis.apk.sha256
+            HoloForgeAR-v0.6-visible-manual-modes.apk
+            HoloForgeAR-v0.6-visible-manual-modes.apk.sha256
           if-no-files-found: error
           retention-days: 14
