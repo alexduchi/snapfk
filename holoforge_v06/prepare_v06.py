@@ -33,29 +33,29 @@ def main() -> None:
 
     layout_path = OUT / "app/src/main/res/layout/activity_main.xml"
     layout = layout_path.read_text()
-    marker = '''          </LinearLayout>
+    marker = '''  </LinearLayout>
 
-          <View
-              android:layout_width="38dp"'''
+  <View
+      android:layout_width="38dp"'''
     mode_row = '''
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="42dp"
-                android:layout_marginTop="10dp"
-                android:orientation="horizontal">
-              <TextView
-                  android:id="@+id/mode_touch"
-                  style="@style/HoloAxisButton"
-                  android:text="TACTILE" />
-              <TextView
-                  android:id="@+id/mode_one_hand"
-                  style="@style/HoloAxisButton"
-                  android:text="UNE MAIN" />
-            </LinearLayout>
-          </LinearLayout>
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="42dp"
+        android:layout_marginTop="10dp"
+        android:orientation="horizontal">
+      <TextView
+          android:id="@+id/mode_touch"
+          style="@style/HoloAxisButton"
+          android:text="TACTILE" />
+      <TextView
+          android:id="@+id/mode_one_hand"
+          style="@style/HoloAxisButton"
+          android:text="UNE MAIN" />
+    </LinearLayout>
+  </LinearLayout>
 
-          <View
-              android:layout_width="38dp"'''
+  <View
+      android:layout_width="38dp"'''
     layout = replace_once(layout, marker, mode_row, "manual control mode row")
     layout_path.write_text(layout)
 
