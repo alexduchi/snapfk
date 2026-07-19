@@ -4,9 +4,9 @@ from pathlib import Path
 script_path = Path(__file__).with_name("prepare_v06.py")
 source = script_path.read_text()
 start = source.index("    marker = '''")
-end = source.index("    layout = replace_once", start)
-marker = '          <View\n              android:layout_width="38dp"'
-mode_row = '''            <LinearLayout
+end = source.index("    layout_path.write_text(layout)", start)
+mode_row = '''
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="42dp"
                 android:layout_marginTop="10dp"
@@ -20,10 +20,13 @@ mode_row = '''            <LinearLayout
                   style="@style/HoloAxisButton"
                   android:text="UNE MAIN" />
             </LinearLayout>
-
-          <View
-              android:layout_width="38dp"'''
-replacement = f"    marker = {marker!r}\n    mode_row = {mode_row!r}\n"
+'''
+replacement = (
+    "    status_pos = layout.index('android:id=\"@+id/axis_status\"')\n"
+    "    insert_pos = layout.index('          </LinearLayout>', status_pos)\n"
+    f"    mode_row = {mode_row!r}\n"
+    "    layout = layout[:insert_pos] + mode_row + layout[insert_pos:]\n"
+)
 source = source[:start] + replacement + source[end:]
 namespace = {"__name__": "__main__", "__file__": str(script_path)}
 exec(compile(source, str(script_path), "exec"), namespace)
