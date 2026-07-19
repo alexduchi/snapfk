@@ -27,5 +27,9 @@ replacement = (
     "    layout = layout[:insert_pos] + mode_row + layout[insert_pos:]\n"
 )
 source = source[:start] + replacement + source[end:]
+source = source.replace(
+    "'      private void setAxisMode(AxisMode mode) {'",
+    "'private void setAxisMode(AxisMode mode) {'",
+)
 namespace = {"__name__": "__main__", "__file__": str(script_path)}
 exec(compile(source, str(script_path), "exec"), namespace)
