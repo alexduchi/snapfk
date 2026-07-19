@@ -1,1 +1,1 @@
-Trigger HoloForge v0.6 visibility and manual mode rebuild
+Trigger HoloForge v0.6 final compilation
