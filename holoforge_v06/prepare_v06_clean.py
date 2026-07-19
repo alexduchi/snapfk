@@ -80,28 +80,28 @@ def main() -> None:
         '    findViewById(R.id.next_object).setOnClickListener(v -> toggleControlMode());',
         'mode button listener')
     source = replace_once(source,
-        '      private void setAxisMode(AxisMode mode) {',
-        '''      private void toggleControlMode() {
-        controlMode = controlMode == ControlMode.TOUCH ? ControlMode.ONE_HAND : ControlMode.TOUCH;
-        runOnUiThread(() -> {
-          TextView button = findViewById(R.id.next_object);
-          button.setText(controlMode == ControlMode.ONE_HAND ? "MODE : UNE MAIN" : "MODE : TACTILE");
-          updateHud();
-        });
-      }
+        'private void setAxisMode(AxisMode mode) {',
+        '''private void toggleControlMode() {
+  controlMode = controlMode == ControlMode.TOUCH ? ControlMode.ONE_HAND : ControlMode.TOUCH;
+  runOnUiThread(() -> {
+    TextView button = findViewById(R.id.next_object);
+    button.setText(controlMode == ControlMode.ONE_HAND ? "MODE : UNE MAIN" : "MODE : TACTILE");
+    updateHud();
+  });
+}
 
-      private String controlLabel() {
-        return controlMode == ControlMode.ONE_HAND ? "Mode une main" : "Mode tactile";
-      }
+private String controlLabel() {
+  return controlMode == ControlMode.ONE_HAND ? "Mode une main" : "Mode tactile";
+}
 
-      private void setAxisMode(AxisMode mode) {''',
+private void setAxisMode(AxisMode mode) {''',
         'control methods')
     source = source.replace(
         ': axisLabel() + " · objet " + (selectedIndex + 1) + "/" + count);',
         ': controlLabel() + " · " + axisLabel() + " · objet " + (selectedIndex + 1) + "/" + count);')
     source = replace_once(source,
-        '          float dx = drag[0];\n          float dy = drag[1];',
-        '          float sensitivity = controlMode == ControlMode.ONE_HAND ? 0.62f : 1.0f;\n          float dx = drag[0] * sensitivity;\n          float dy = drag[1] * sensitivity;',
+        '    float dx = drag[0];\n    float dy = drag[1];',
+        '    float sensitivity = controlMode == ControlMode.ONE_HAND ? 0.62f : 1.0f;\n    float dx = drag[0] * sensitivity;\n    float dy = drag[1] * sensitivity;',
         'one hand sensitivity')
     source = source.replace(
         '.setDepthWrite(false)\n              .setCullFace(false)\n              .setBlend(Shader.BlendFactor.SRC_ALPHA, Shader.BlendFactor.ONE_MINUS_SRC_ALPHA);',
