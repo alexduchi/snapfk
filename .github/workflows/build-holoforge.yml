@@ -38,7 +38,24 @@ jobs:
           gradle-version: '8.6'
 
       - name: Prepare HoloForge v0.6
-        run: python3 holoforge_v06/prepare_v06.py
+        id: prepare
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          python3 holoforge_v06/prepare_v06.py 2>&1 | tee holoforge-v06-prepare.log
+
+      - name: Upload preparation log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: HoloForgeAR-v0.6-prepare-log
+          path: holoforge-v06-prepare.log
+          if-no-files-found: warn
+          retention-days: 3
+
+      - name: Stop after preparation failure
+        if: steps.prepare.outcome == 'failure'
+        run: exit 1
 
       - name: Compile HoloForge AR v0.6
         id: compile
