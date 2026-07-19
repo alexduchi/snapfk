@@ -40,7 +40,7 @@ jobs:
       - name: Prepare HoloForge v0.6
         run: |
           set -o pipefail
-          python3 holoforge_v06/run_fixed.py 2>&1 | tee holoforge-v06-prepare.log
+          python3 holoforge_v06/prepare_v06_clean.py 2>&1 | tee holoforge-v06-prepare.log
 
       - name: Compile HoloForge AR v0.6
         run: |
