@@ -8,12 +8,15 @@ on:
 
 jobs:
   build:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: agent/aevum-apk-build
 
       - name: Setup Java 17
         uses: actions/setup-java@v4
@@ -28,6 +31,7 @@ jobs:
 
       - name: Extract project
         run: |
+          rm -rf project
           mkdir project
           unzip -q aevum_payload.zip -d project
 
@@ -35,12 +39,12 @@ jobs:
         working-directory: project
         run: gradle --stacktrace assembleDebug
 
-      - name: Rename APK
-        run: cp project/app/build/outputs/apk/debug/app-debug.apk Aevum-V1.apk
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: Aevum-V1-APK
-          path: Aevum-V1.apk
-          if-no-files-found: error
+      - name: Publish APK to branch
+        run: |
+          cp project/app/build/outputs/apk/debug/app-debug.apk Aevum-V1.apk
+          sha256sum Aevum-V1.apk > Aevum-V1.apk.sha256
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add Aevum-V1.apk Aevum-V1.apk.sha256
+          git commit -m 'Publish compiled Aevum V1 APK'
+          git push origin HEAD:agent/aevum-apk-build
