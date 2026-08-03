@@ -3,6 +3,8 @@ name: Build Aevum V1 APK
 on:
   push:
     branches: [aevum-v1-apk]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
