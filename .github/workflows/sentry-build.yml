@@ -1,4 +1,4 @@
-name: Build Aevum APK
+name: Build Sentry APK
 
 on:
   push:
@@ -18,28 +18,28 @@ jobs:
         with:
           ref: agent/aevum-apk-build
 
-      - name: Setup Java 17
+      - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Setup Gradle
+      - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.10.2'
 
-      - name: Extract project
+      - name: Extract Aevum project
         run: |
           rm -rf project
           mkdir project
           unzip -q aevum_payload.zip -d project
 
-      - name: Build debug APK
+      - name: Build Aevum debug APK
         working-directory: project
-        run: gradle --stacktrace assembleDebug
+        run: gradle :app:assembleDebug --stacktrace
 
-      - name: Publish APK to branch
+      - name: Publish APK into branch
         run: |
           cp project/app/build/outputs/apk/debug/app-debug.apk Aevum-V1.apk
           sha256sum Aevum-V1.apk > Aevum-V1.apk.sha256
