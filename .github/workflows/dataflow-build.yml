@@ -1,65 +1,56 @@
 name: DataFlow Android Build
-
 on:
   pull_request:
-    paths:
-      - 'dataflow/**'
-      - '.github/workflows/dataflow-build.yml'
   workflow_dispatch:
-
 permissions:
   contents: read
-
 jobs:
   build-test-package:
     runs-on: ubuntu-latest
     timeout-minutes: 35
-    defaults:
-      run:
-        working-directory: dataflow
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - uses: actions/checkout@v4
+      - name: Restore source tree
+        run: |
+          cat dataflow-src.part1 dataflow-src.part2 dataflow-src.part3 dataflow-src.part4a dataflow-src.part4b dataflow-src.part4c > source.b64
+          test "$(wc -c < source.b64)" = "37224"
+          base64 -d source.b64 > source.tar.gz
+          echo '4a7b0a39f95a4ee656b3aea2574db37796a1aab0cef329cdf27f1a1b1f66ee67  source.tar.gz' | sha256sum -c -
+          mkdir dataflow
+          tar -xzf source.tar.gz -C dataflow
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-      - name: Install SDK packages
-        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'platform-tools' 'emulator' 'system-images;android-35;google_apis;x86_64'
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - uses: android-actions/setup-android@v3
+      - name: Install SDK
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'platform-tools'
+      - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - name: Unit tests
-        run: gradle --stacktrace testDebugUnitTest
-      - name: Lint
-        run: gradle --stacktrace lintDebug
-      - name: Assemble signed debug APK
-        run: gradle --stacktrace assembleDebug
-      - name: Verify manifest and signature
+      - name: Test, lint and build
+        working-directory: dataflow
+        run: gradle --stacktrace testDebugUnitTest lintDebug assembleDebug
+      - name: Verify APK
+        working-directory: dataflow
         run: |
           APK=app/build/outputs/apk/debug/app-debug.apk
           test -s "$APK"
           apksigner verify --verbose --print-certs "$APK" | tee signature-report.txt
           aapt dump badging "$APK" | tee apk-badging.txt
           apkanalyzer manifest permissions "$APK" | tee apk-permissions.txt
-          if grep -q 'android.permission.INTERNET' apk-permissions.txt; then exit 1; fi
-      - name: Prepare deliverables
+          ! grep -q 'android.permission.INTERNET' apk-permissions.txt
+      - name: Package
+        working-directory: dataflow
         run: |
-          mkdir -p deliverables
+          mkdir deliverables
           cp app/build/outputs/apk/debug/app-debug.apk deliverables/DataFlow.apk
           cp README.md deliverables/README.md
           cp signature-report.txt apk-badging.txt apk-permissions.txt deliverables/
           zip -r deliverables/DataFlow-source.zip . -x '.gradle/*' 'app/build/*' 'build/*' 'deliverables/*' '.idea/*' '*.jks' '*.keystore'
           sha256sum deliverables/DataFlow.apk deliverables/DataFlow-source.zip > deliverables/SHA256SUMS.txt
-          printf 'Compilation: successful\nTests: successful\nLint: successful\nSignature: verified\n' > deliverables/build-report.txt
-      - name: Upload deliverables
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: dataflow-deliverables
           path: dataflow/deliverables/*
           if-no-files-found: error
-          retention-days: 30
