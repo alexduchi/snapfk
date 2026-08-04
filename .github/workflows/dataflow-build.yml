@@ -1,5 +1,8 @@
 name: DataFlow Android Build
 on:
+  push:
+    branches:
+      - dataflow-build-20260804
   pull_request:
   workflow_dispatch:
 permissions:
