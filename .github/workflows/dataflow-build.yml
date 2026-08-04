@@ -20,11 +20,26 @@ jobs:
           tar -xzf source.tar.gz -C dataflow
           python3 - <<'PY'
           from pathlib import Path
-          p = Path('dataflow/app/src/main/java/com/dataflow/app/MainActivity.kt')
-          s = p.read_text()
-          s = s.replace('import androidx.activity.compose.rememberLauncherForActivityResult\n', 'import androidx.activity.compose.rememberLauncherForActivityResult\nimport androidx.activity.compose.setContent\n')
-          s = s.replace('Intent(Settings.ACTION_DATA_SAVER_SETTINGS)', 'Intent("android.settings.DATA_SAVER_SETTINGS")')
-          p.write_text(s)
+
+          main = Path('dataflow/app/src/main/java/com/dataflow/app/MainActivity.kt')
+          text = main.read_text()
+          text = text.replace(
+              'import androidx.activity.compose.rememberLauncherForActivityResult\n',
+              'import androidx.activity.compose.rememberLauncherForActivityResult\nimport androidx.activity.compose.setContent\n'
+          )
+          text = text.replace(
+              'Intent(Settings.ACTION_DATA_SAVER_SETTINGS)',
+              'Intent("android.settings.DATA_SAVER_SETTINGS")'
+          )
+          main.write_text(text)
+
+          stats = Path('dataflow/app/src/main/java/com/dataflow/app/NetworkStatsReader.kt')
+          text = stats.read_text()
+          old = '        val mode = appOps.unsafeCheckOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), context.packageName)'
+          new = '        @Suppress("DEPRECATION")\n        val mode = appOps.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), context.packageName)'
+          if old not in text:
+              raise SystemExit('Expected AppOps compatibility line was not found')
+          stats.write_text(text.replace(old, new))
           PY
       - uses: actions/setup-java@v4
         with:
@@ -47,13 +62,17 @@ jobs:
         if: steps.gradle.outcome == 'failure'
         working-directory: dataflow
         run: |
-          grep -n -E '(^e: | error: |FAILURE:|What went wrong|Compilation error|Unresolved reference|Exception)' gradle-build.log | tail -n 250 || true
+          grep -n -E '(^e: | error: |Error:|FAILURE:|What went wrong|Compilation error|Unresolved reference|Exception)' gradle-build.log | tail -n 300 || true
+          find app/build -name 'lint-results-debug.txt' -print -exec cat {} \; || true
       - name: Upload diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: dataflow-diagnostics
-          path: dataflow/gradle-build.log
+          path: |
+            dataflow/gradle-build.log
+            dataflow/app/build/reports/lint-results-debug.txt
+            dataflow/app/build/intermediates/lint_intermediate_text_report/debug/lintReportDebug/lint-results-debug.txt
           if-no-files-found: warn
       - name: Stop on Gradle failure
         if: steps.gradle.outcome == 'failure'
