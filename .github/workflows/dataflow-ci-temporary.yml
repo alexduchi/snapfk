@@ -13,8 +13,12 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
       - name: Restore DataFlow source
         run: |
+          git fetch origin dataflow-build-20260804 --depth=1
+          git show FETCH_HEAD:dataflow-source.b64 > dataflow-source.b64
           base64 -d dataflow-source.b64 > source.tar.gz
           echo 'afc6aec687af886eee757837792a1bb1deae00501263c3946ceb0744e494ffc9  source.tar.gz' | sha256sum -c -
           mkdir dataflow
@@ -25,7 +29,13 @@ jobs:
           if main.exists():
               text = main.read_text()
               text = text.replace('import androidx.activity.compose.rememberLauncherForActivityResult\n', 'import androidx.activity.compose.rememberLauncherForActivityResult\nimport androidx.activity.compose.setContent\n')
+              text = text.replace('Intent(Settings.ACTION_DATA_SAVER_SETTINGS)', 'Intent("android.settings.DATA_SAVER_SETTINGS")')
               main.write_text(text)
+          stats = Path('dataflow/app/src/main/java/com/dataflow/app/NetworkStatsReader.kt')
+          if stats.exists():
+              text = stats.read_text()
+              text = text.replace('val mode = appOps.unsafeCheckOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), context.packageName)', '@Suppress("DEPRECATION")\n        val mode = appOps.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), context.packageName)')
+              stats.write_text(text)
           PY
       - uses: actions/setup-java@v4
         with:
@@ -49,7 +59,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: dataflow-diagnostics
-          path: dataflow/gradle-build.log
+          path: |
+            dataflow/gradle-build.log
+            dataflow/app/build/reports/lint-results-debug.txt
+            dataflow/app/build/reports/tests/testDebugUnitTest/
           if-no-files-found: warn
       - name: Stop after Gradle failure
         if: steps.gradle.outcome == 'failure'
@@ -59,13 +72,14 @@ jobs:
         run: |
           APK=app/build/outputs/apk/debug/app-debug.apk
           test -s "$APK"
-          apksigner verify --verbose --print-certs "$APK"
-          aapt dump badging "$APK"
+          apksigner verify --verbose --print-certs "$APK" | tee signature-report.txt
+          aapt dump badging "$APK" | tee apk-badging.txt
           apkanalyzer manifest permissions "$APK" | tee apk-permissions.txt
           ! grep -q 'android.permission.INTERNET' apk-permissions.txt
           mkdir deliverables
           cp "$APK" deliverables/DataFlow.apk
           cp README.md deliverables/README.md
+          cp signature-report.txt apk-badging.txt apk-permissions.txt deliverables/
           zip -r deliverables/DataFlow-source.zip . -x '.gradle/*' 'app/build/*' 'build/*' 'deliverables/*' '.idea/*' '*.jks' '*.keystore'
           sha256sum deliverables/DataFlow.apk deliverables/DataFlow-source.zip > deliverables/SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
