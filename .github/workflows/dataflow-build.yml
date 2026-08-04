@@ -18,6 +18,14 @@ jobs:
           echo '4a7b0a39f95a4ee656b3aea2574db37796a1aab0cef329cdf27f1a1b1f66ee67  source.tar.gz' | sha256sum -c -
           mkdir dataflow
           tar -xzf source.tar.gz -C dataflow
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('dataflow/app/src/main/java/com/dataflow/app/MainActivity.kt')
+          s = p.read_text()
+          s = s.replace('import androidx.activity.compose.rememberLauncherForActivityResult\n', 'import androidx.activity.compose.rememberLauncherForActivityResult\nimport androidx.activity.compose.setContent\n')
+          s = s.replace('Intent(Settings.ACTION_DATA_SAVER_SETTINGS)', 'Intent("android.settings.DATA_SAVER_SETTINGS")')
+          p.write_text(s)
+          PY
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
