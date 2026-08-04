@@ -1,1 +1,1 @@
-DataFlow focused diagnostics trigger 2026-08-04T15:50Z
+DataFlow rebuilt after AppOps compatibility fix — 2026-08-04T18:58+02:00
