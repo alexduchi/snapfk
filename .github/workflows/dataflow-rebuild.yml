@@ -17,15 +17,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Restore DataFlow source
+      - name: Validate source tree
         run: |
-          base64 --decode --ignore-garbage dataflow-current.b64 > dataflow.tar.gz
-          gzip -t dataflow.tar.gz
-          tar -tzf dataflow.tar.gz >/dev/null
-          mkdir -p dataflow
-          tar -xzf dataflow.tar.gz -C dataflow
-          test -f dataflow/settings.gradle.kts
-          test -f dataflow/app/build.gradle.kts
+          test -f dataflow-project/settings.gradle.kts
+          test -f dataflow-project/app/build.gradle.kts
+          test -f dataflow-project/app/src/main/java/com/neo/dataflow/MainActivity.kt
+          test -f dataflow-project/app/src/main/java/com/neo/dataflow/Core.kt
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
@@ -48,7 +45,7 @@ jobs:
 
       - name: Test, lint and build
         id: gradle
-        working-directory: dataflow
+        working-directory: dataflow-project
         continue-on-error: true
         run: |
           set -o pipefail
@@ -60,8 +57,8 @@ jobs:
         with:
           name: dataflow-diagnostics
           path: |
-            dataflow/gradle-build.log
-            dataflow/app/build/reports/
+            dataflow-project/gradle-build.log
+            dataflow-project/app/build/reports/
           if-no-files-found: warn
 
       - name: Stop on Gradle failure
@@ -69,7 +66,7 @@ jobs:
         run: exit 1
 
       - name: Verify APK
-        working-directory: dataflow
+        working-directory: dataflow-project
         run: |
           APK=app/build/outputs/apk/debug/app-debug.apk
           test -s "$APK"
@@ -82,19 +79,38 @@ jobs:
           fi
 
       - name: Package deliverables
-        working-directory: dataflow
+        working-directory: dataflow-project
         run: |
           mkdir -p deliverables
           cp app/build/outputs/apk/debug/app-debug.apk deliverables/DataFlow.apk
-          cp README.md deliverables/README.md
+          cat > deliverables/README.md <<'EOF'
+          # DataFlow
+
+          Application Android locale de suivi de consommation de donnees.
+
+          - Android minimum : Android 8.0 (API 26)
+          - Package : com.neo.dataflow
+          - APK : build debug signe automatiquement
+          - Aucune permission INTERNET, aucune publicite, aucun tracker
+          - Statistiques : acces special Android aux donnees d'utilisation
+          - Notifications : permission demandee sur Android 13+ seulement lors de l'activation
+          - Mode manuel disponible si NetworkStatsManager est indisponible
+          - Unites decimales operateur : 1 Go = 1 000 000 000 octets
+
+          Installation : ouvrir DataFlow.apk et autoriser temporairement l'installation depuis cette source si Android le demande.
+
+          Limites : Android et certains constructeurs peuvent retarder ou refuser les statistiques, limiter la separation multi-SIM et les details par application. Les alertes en arriere-plan ne sont jamais garanties a la minute pres.
+
+          Reconstruction : JDK 17, SDK Android 35 et Gradle 8.9, puis `gradle testDebugUnitTest lintDebug assembleDebug`.
+          EOF
           cp signature-report.txt apk-badging.txt apk-permissions.txt deliverables/
           zip -r deliverables/DataFlow-source.zip . \
-            -x '.gradle/*' 'app/build/*' 'build/*' 'deliverables/*' '.idea/*' '*.jks' '*.keystore'
+            -x '.gradle/*' 'app/build/*' 'build/*' 'deliverables/*' '.idea/*' '*.jks' '*.keystore' 'gradle-build.log'
           sha256sum deliverables/DataFlow.apk deliverables/DataFlow-source.zip > deliverables/SHA256SUMS.txt
 
       - name: Upload DataFlow deliverables
         uses: actions/upload-artifact@v4
         with:
           name: DataFlow-deliverables
-          path: dataflow/deliverables/
+          path: dataflow-project/deliverables/
           if-no-files-found: error
