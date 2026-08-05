@@ -19,7 +19,7 @@ jobs:
 
       - name: Restore DataFlow source
         run: |
-          base64 -d dataflow-current.b64 > dataflow.tar.gz
+          base64 --decode --ignore-garbage dataflow-current.b64 > dataflow.tar.gz
           gzip -t dataflow.tar.gz
           tar -tzf dataflow.tar.gz >/dev/null
           mkdir -p dataflow
