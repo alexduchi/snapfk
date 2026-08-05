@@ -10,6 +10,14 @@ on:
       - sentry-v3.0-20260717
       - sentry-v3.5-20260717
       - sentry-v4.0-20260717
+      - sentry-v10.0-20260718
+      - sentry-v11.0-20260718
+      - sentry-v12.0-20260718
+      - sentry-v13.0-20260718
+      - sentry-v14.0-20260718
+      - sentry-v15.0-20260718
+      - sentry-v20.0-20260718
+      - sentry-v21.0-20260718
   pull_request:
     branches:
       - main
@@ -40,6 +48,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Sentry-v4.0.0-debug
+          name: Sentry-v21.0.0-debug
           path: sentry/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
