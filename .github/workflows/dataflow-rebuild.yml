@@ -20,7 +20,7 @@ jobs:
       - name: Restore DataFlow source
         run: |
           base64 -d dataflow-current.b64 > dataflow.tar.gz
-          echo '6a8e0e462aff6e95fe6cdda692b781776e0e80e2edc60a00fda6413135eec6f3  dataflow.tar.gz' | sha256sum -c -
+          echo 'f4d7667b7c5e03d908bc1a5f3c61e5eb9b7b83fef47384402f39aa65393c9d6a  dataflow.tar.gz' | sha256sum -c -
           mkdir -p dataflow
           tar -xzf dataflow.tar.gz -C dataflow
 
