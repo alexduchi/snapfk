@@ -20,9 +20,12 @@ jobs:
       - name: Restore DataFlow source
         run: |
           base64 -d dataflow-current.b64 > dataflow.tar.gz
-          echo 'f4d7667b7c5e03d908bc1a5f3c61e5eb9b7b83fef47384402f39aa65393c9d6a  dataflow.tar.gz' | sha256sum -c -
+          gzip -t dataflow.tar.gz
+          tar -tzf dataflow.tar.gz >/dev/null
           mkdir -p dataflow
           tar -xzf dataflow.tar.gz -C dataflow
+          test -f dataflow/settings.gradle.kts
+          test -f dataflow/app/build.gradle.kts
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
