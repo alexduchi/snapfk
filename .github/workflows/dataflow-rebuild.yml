@@ -1,0 +1,97 @@
+name: DataFlow Rebuild
+
+on:
+  push:
+    branches:
+      - dataflow-build
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Restore DataFlow source
+        run: |
+          base64 -d dataflow-current.b64 > dataflow.tar.gz
+          echo '6a8e0e462aff6e95fe6cdda692b781776e0e80e2edc60a00fda6413135eec6f3  dataflow.tar.gz' | sha256sum -c -
+          mkdir -p dataflow
+          tar -xzf dataflow.tar.gz -C dataflow
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
+        run: |
+          yes | sdkmanager --licenses >/dev/null
+          sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'platform-tools'
+
+      - name: Set up Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Test, lint and build
+        id: gradle
+        working-directory: dataflow
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          gradle --no-daemon --stacktrace testDebugUnitTest lintDebug assembleDebug 2>&1 | tee gradle-build.log
+
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dataflow-diagnostics
+          path: |
+            dataflow/gradle-build.log
+            dataflow/app/build/reports/
+          if-no-files-found: warn
+
+      - name: Stop on Gradle failure
+        if: steps.gradle.outcome == 'failure'
+        run: exit 1
+
+      - name: Verify APK
+        working-directory: dataflow
+        run: |
+          APK=app/build/outputs/apk/debug/app-debug.apk
+          test -s "$APK"
+          apksigner verify --verbose --print-certs "$APK" | tee signature-report.txt
+          aapt dump badging "$APK" | tee apk-badging.txt
+          apkanalyzer manifest permissions "$APK" | tee apk-permissions.txt
+          if grep -q 'android.permission.INTERNET' apk-permissions.txt; then
+            echo 'INTERNET permission unexpectedly present' >&2
+            exit 1
+          fi
+
+      - name: Package deliverables
+        working-directory: dataflow
+        run: |
+          mkdir -p deliverables
+          cp app/build/outputs/apk/debug/app-debug.apk deliverables/DataFlow.apk
+          cp README.md deliverables/README.md
+          cp signature-report.txt apk-badging.txt apk-permissions.txt deliverables/
+          zip -r deliverables/DataFlow-source.zip . \
+            -x '.gradle/*' 'app/build/*' 'build/*' 'deliverables/*' '.idea/*' '*.jks' '*.keystore'
+          sha256sum deliverables/DataFlow.apk deliverables/DataFlow-source.zip > deliverables/SHA256SUMS.txt
+
+      - name: Upload DataFlow deliverables
+        uses: actions/upload-artifact@v4
+        with:
+          name: DataFlow-deliverables
+          path: dataflow/deliverables/
+          if-no-files-found: error
