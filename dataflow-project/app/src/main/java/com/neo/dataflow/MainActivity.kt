@@ -512,7 +512,7 @@ private fun SettingsScreen(
                 Text("Affichage", fontWeight = FontWeight.Bold)
                 StableSwitch("Thème sombre", dark, onDarkChange)
                 StableSwitch("Réduire les effets visuels", snapshot.reduceEffects) { enabled ->
-                    vm.update { it.copy(reduceEffects = enabled) }
+                    vm.update(transform = { it.copy(reduceEffects = enabled) })
                 }
             }
         }
@@ -521,7 +521,7 @@ private fun SettingsScreen(
                 Text("Notifications", fontWeight = FontWeight.Bold)
                 StableSwitch("Alertes locales", snapshot.notifications) { enabled ->
                     if (enabled && Build.VERSION.SDK_INT >= 33) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-                    vm.update { it.copy(notifications = enabled) }
+                    vm.update(transform = { it.copy(notifications = enabled) })
                 }
             }
         }
@@ -533,7 +533,9 @@ private fun SettingsScreen(
                     Button(onClick = { createCsv.launch("DataFlow-history.csv") }) { Text("CSV") }
                 }
                 Button(onClick = { openJson.launch(arrayOf("application/json")) }) { Text("Importer") }
-                StableSwitch("Mode démonstration", snapshot.demo) { enabled -> vm.update { it.copy(demo = enabled) } }
+                StableSwitch("Mode démonstration", snapshot.demo) { enabled ->
+                    vm.update(transform = { it.copy(demo = enabled) })
+                }
             }
         }
         item {
