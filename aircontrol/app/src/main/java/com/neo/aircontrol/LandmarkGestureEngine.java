@@ -4,26 +4,130 @@ import java.util.ArrayDeque;
 
 public final class LandmarkGestureEngine {
     public static final class DebugState {
-        public boolean handFound, vPose, armed, waitRelease;
-        public int vFrames;
-        public float palmScale, x, y;
+        public boolean handFound, tracking, grace;
+        public int samples;
+        public float palmScale, x, y, speed, displacement, coherence;
         public String state="NO_HAND";
         public GestureCommand lastCommand=GestureCommand.NONE;
     }
-    private static final int WRIST=0, INDEX_MCP=5, INDEX_PIP=6, INDEX_DIP=7, INDEX_TIP=8, MIDDLE_MCP=9, MIDDLE_PIP=10, MIDDLE_DIP=11, MIDDLE_TIP=12, RING_MCP=13, RING_PIP=14, RING_DIP=15, RING_TIP=16, PINKY_MCP=17, PINKY_PIP=18, PINKY_DIP=19, PINKY_TIP=20;
-    private static final int ARM_FRAMES=3, RELEASE_FRAMES=3;
-    private static final long LOST_GRACE_MS=450, COOLDOWN_MS=430;
-    private static final float MIN_DISP=.095f, MIN_SPEED=.30f, DOMINANCE=1.35f;
+
+    private static final int WRIST=0, INDEX_MCP=5, MIDDLE_MCP=9, RING_MCP=13, PINKY_MCP=17;
+    private static final long SOFT_LOST_MS=240, HARD_LOST_MS=700, COOLDOWN_MS=300, ACQUIRE_MS=120, HISTORY_MS=340;
+    private static final float MIN_DISP=.068f, MIN_SPEED=.30f, DOMINANCE=1.28f, MAX_SINGLE_STEP=.20f;
     private final DebugState d=new DebugState();
     private final ArrayDeque<Sample> history=new ArrayDeque<>();
-    private int vFrames,releaseFrames; private boolean armed,waitRelease; private long lastHandMs,cooldownUntil,anchorT; private float anchorX,anchorY;
-    private static final class Sample{final float x,y;final long t;Sample(float x,float y,long t){this.x=x;this.y=y;this.t=t;}}
+    private long lastHandMs, firstHandMs, cooldownUntil;
+    private boolean haveFiltered;
+    private float fx,fy;
+
+    private static final class Sample {
+        final float x,y; final long t;
+        Sample(float x,float y,long t){this.x=x;this.y=y;this.t=t;}
+    }
+
     public DebugState debug(){return d;}
-    public void reset(){vFrames=releaseFrames=0;armed=false;waitRelease=false;history.clear();d.handFound=d.vPose=d.armed=d.waitRelease=false;d.vFrames=0;d.state="RESET";d.lastCommand=GestureCommand.NONE;}
-    public GestureCommand onNoHand(long now){d.handFound=false;d.vPose=false;if(now-lastHandMs>LOST_GRACE_MS){armed=false;vFrames=0;history.clear();if(waitRelease){releaseFrames++;if(releaseFrames>=RELEASE_FRAMES){waitRelease=false;releaseFrames=0;}}}d.armed=armed;d.waitRelease=waitRelease;d.vFrames=vFrames;d.state=waitRelease?"WAIT_RELEASE":"NO_HAND";return GestureCommand.NONE;}
-    public GestureCommand process(float[] x,float[] y,float[] z,long now){if(x==null||y==null||z==null||x.length<21||y.length<21||z.length<21)return onNoHand(now);lastHandMs=now;d.handFound=true;float palmScale=Math.max(.001f,dist3(x,y,z,INDEX_MCP,PINKY_MCP));d.palmScale=palmScale;boolean indexExt=extended(x,y,z,INDEX_MCP,INDEX_PIP,INDEX_DIP,INDEX_TIP),middleExt=extended(x,y,z,MIDDLE_MCP,MIDDLE_PIP,MIDDLE_DIP,MIDDLE_TIP),ringExt=extended(x,y,z,RING_MCP,RING_PIP,RING_DIP,RING_TIP),pinkyExt=extended(x,y,z,PINKY_MCP,PINKY_PIP,PINKY_DIP,PINKY_TIP);float sep=dist3(x,y,z,INDEX_TIP,MIDDLE_TIP)/palmScale;boolean v=indexExt&&middleExt&&!ringExt&&!pinkyExt&&sep>.42f;d.vPose=v;float tipX=(x[INDEX_TIP]+x[MIDDLE_TIP])*.5f,tipY=(y[INDEX_TIP]+y[MIDDLE_TIP])*.5f,palmX=(x[WRIST]+x[INDEX_MCP]+x[MIDDLE_MCP]+x[RING_MCP]+x[PINKY_MCP])/5f,palmY=(y[WRIST]+y[INDEX_MCP]+y[MIDDLE_MCP]+y[RING_MCP]+y[PINKY_MCP])/5f,px=tipX*.78f+palmX*.22f,py=tipY*.78f+palmY*.22f;d.x=px;d.y=py;if(waitRelease){armed=false;history.clear();vFrames=0;if(!v){releaseFrames++;if(releaseFrames>=RELEASE_FRAMES){waitRelease=false;releaseFrames=0;}}else releaseFrames=0;d.armed=false;d.waitRelease=waitRelease;d.vFrames=0;d.state=waitRelease?"WAIT_RELEASE":"READY";return GestureCommand.NONE;}if(v)vFrames=Math.min(ARM_FRAMES,vFrames+1);else if(!armed)vFrames=Math.max(0,vFrames-1);d.vFrames=vFrames;if(!armed&&vFrames>=ARM_FRAMES&&now>=cooldownUntil){armed=true;anchorX=px;anchorY=py;anchorT=now;history.clear();history.add(new Sample(px,py,now));}if(!armed){d.armed=false;d.waitRelease=false;d.state=v?"V_"+vFrames+"/"+ARM_FRAMES:"HAND";return GestureCommand.NONE;}d.armed=true;d.state=v?"ARMED":"ARMED_GRACE";history.addLast(new Sample(px,py,now));while(history.size()>12||(!history.isEmpty()&&now-history.peekFirst().t>650))history.removeFirst();long dt=Math.max(1,now-anchorT);float dx=px-anchorX,dy=py-anchorY,adx=Math.abs(dx),ady=Math.abs(dy),dist=Math.max(adx,ady),speed=dist/(dt/1000f);if(dt>380&&speed<.20f){anchorX=anchorX*.72f+px*.28f;anchorY=anchorY*.72f+py*.28f;anchorT=now;history.clear();history.add(new Sample(px,py,now));d.state="REPOSITION";return GestureCommand.NONE;}if(dist<MIN_DISP||speed<MIN_SPEED)return GestureCommand.NONE;GestureCommand cmd=GestureCommand.NONE;if(adx>ady*DOMINANCE)cmd=dx>0?GestureCommand.RIGHT:GestureCommand.LEFT;else if(ady>adx*DOMINANCE)cmd=dy>0?GestureCommand.DOWN:GestureCommand.UP;if(cmd==GestureCommand.NONE||!coherent(cmd))return GestureCommand.NONE;d.lastCommand=cmd;d.state="FIRED_"+cmd.name();armed=false;waitRelease=true;releaseFrames=0;vFrames=0;cooldownUntil=now+COOLDOWN_MS;history.clear();d.armed=false;d.waitRelease=true;return cmd;}
-    private boolean extended(float[] x,float[] y,float[] z,int mcp,int pip,int dip,int tip){float a1=angle(x,y,z,mcp,pip,dip),a2=angle(x,y,z,pip,dip,tip),tipW=dist3(x,y,z,WRIST,tip),pipW=dist3(x,y,z,WRIST,pip);return a1>142f&&a2>138f&&tipW>pipW*1.10f;}
-    private static float angle(float[] x,float[] y,float[] z,int a,int b,int c){float ux=x[a]-x[b],uy=y[a]-y[b],uz=z[a]-z[b],vx=x[c]-x[b],vy=y[c]-y[b],vz=z[c]-z[b],nu=(float)Math.sqrt(ux*ux+uy*uy+uz*uz),nv=(float)Math.sqrt(vx*vx+vy*vy+vz*vz);if(nu<1e-6f||nv<1e-6f)return 0f;float q=(ux*vx+uy*vy+uz*vz)/(nu*nv);q=Math.max(-1f,Math.min(1f,q));return(float)Math.toDegrees(Math.acos(q));}
-    private static float dist3(float[] x,float[] y,float[] z,int a,int b){float dx=x[a]-x[b],dy=y[a]-y[b],dz=z[a]-z[b];return(float)Math.sqrt(dx*dx+dy*dy+dz*dz);}
-    private boolean coherent(GestureCommand cmd){if(history.size()<3)return false;Sample p=null;float along=0,against=0,cross=0;for(Sample s:history){if(p!=null){float dx=s.x-p.x,dy=s.y-p.y,q,c;switch(cmd){case RIGHT:q=dx;c=Math.abs(dy);break;case LEFT:q=-dx;c=Math.abs(dy);break;case DOWN:q=dy;c=Math.abs(dx);break;case UP:q=-dy;c=Math.abs(dx);break;default:q=c=0;}if(q>=0)along+=q;else against+=-q;cross+=c;}p=s;}return along>.045f&&along>against*1.8f&&along>cross*.82f;}
+
+    public void reset(){
+        history.clear();haveFiltered=false;lastHandMs=firstHandMs=cooldownUntil=0;
+        d.handFound=d.tracking=d.grace=false;d.samples=0;d.speed=d.displacement=d.coherence=0;d.state="RESET";d.lastCommand=GestureCommand.NONE;
+    }
+
+    public GestureCommand onNoHand(long now){
+        d.handFound=false;
+        long gap=lastHandMs==0?Long.MAX_VALUE:now-lastHandMs;
+        if(gap<=HARD_LOST_MS){
+            d.grace=true;d.tracking=!history.isEmpty();d.state=gap<=SOFT_LOST_MS?"GRACE":"SEARCHING";
+            return GestureCommand.NONE;
+        }
+        history.clear();haveFiltered=false;firstHandMs=0;d.grace=false;d.tracking=false;d.samples=0;d.state="NO_HAND";
+        return GestureCommand.NONE;
+    }
+
+    public GestureCommand process(float[] x,float[] y,float[] z,long now){
+        if(x==null||y==null||z==null||x.length<21||y.length<21||z.length<21)return onNoHand(now);
+
+        float palmX=(x[WRIST]+x[INDEX_MCP]+x[MIDDLE_MCP]+x[RING_MCP]+x[PINKY_MCP])/5f;
+        float palmY=(y[WRIST]+y[INDEX_MCP]+y[MIDDLE_MCP]+y[RING_MCP]+y[PINKY_MCP])/5f;
+        float palmScale=Math.max(.001f,dist3(x,y,z,INDEX_MCP,PINKY_MCP));
+        d.palmScale=palmScale;d.handFound=true;d.grace=false;
+
+        long gap=lastHandMs==0?Long.MAX_VALUE:now-lastHandMs;
+        lastHandMs=now;
+        if(firstHandMs==0||gap>HARD_LOST_MS){firstHandMs=now;history.clear();haveFiltered=false;}
+
+        if(!haveFiltered){fx=palmX;fy=palmY;haveFiltered=true;}
+        else {
+            float dx=palmX-fx,dy=palmY-fy;
+            float jump=(float)Math.sqrt(dx*dx+dy*dy);
+            if(jump>MAX_SINGLE_STEP){
+                fx=palmX;fy=palmY;history.clear();firstHandMs=now;d.state="REACQUIRE";
+            }else{
+                float alpha=gap>SOFT_LOST_MS?.65f:.55f;
+                fx+=dx*alpha;fy+=dy*alpha;
+            }
+        }
+
+        d.x=fx;d.y=fy;
+        history.addLast(new Sample(fx,fy,now));
+        while(!history.isEmpty()&&(history.size()>18||now-history.peekFirst().t>HISTORY_MS))history.removeFirst();
+        d.samples=history.size();d.tracking=true;
+
+        if(now<cooldownUntil){
+            while(history.size()>3)history.removeFirst();
+            d.state="COOLDOWN";return GestureCommand.NONE;
+        }
+        if(now-firstHandMs<ACQUIRE_MS||history.size()<4){d.state="TRACKING";return GestureCommand.NONE;}
+
+        Sample first=history.peekFirst(),last=history.peekLast();
+        long dtMs=effectiveDurationMs();
+        float dx=last.x-first.x,dy=last.y-first.y,adx=Math.abs(dx),ady=Math.abs(dy);
+        float disp=Math.max(adx,ady),speed=disp/(dtMs/1000f);
+        d.displacement=disp;d.speed=speed;
+
+        GestureCommand candidate=GestureCommand.NONE;
+        if(adx>ady*DOMINANCE)candidate=dx>0?GestureCommand.RIGHT:GestureCommand.LEFT;
+        else if(ady>adx*DOMINANCE)candidate=dy>0?GestureCommand.DOWN:GestureCommand.UP;
+        if(candidate==GestureCommand.NONE||disp<MIN_DISP||speed<MIN_SPEED){d.coherence=0;d.state="TRACKING";return GestureCommand.NONE;}
+
+        float coherence=coherence(candidate);d.coherence=coherence;
+        if(coherence<.70f){d.state="TRACKING";return GestureCommand.NONE;}
+
+        d.lastCommand=candidate;d.state="FIRED_"+candidate.name();cooldownUntil=now+COOLDOWN_MS;
+        history.clear();history.add(new Sample(fx,fy,now));firstHandMs=now-ACQUIRE_MS;
+        return candidate;
+    }
+
+    private long effectiveDurationMs(){
+        if(history.size()<2)return 1;
+        Sample p=null;long total=0;
+        for(Sample s:history){if(p!=null)total+=Math.min(90,Math.max(1,s.t-p.t));p=s;}
+        return Math.max(1,total);
+    }
+
+    private float coherence(GestureCommand cmd){
+        if(history.size()<3)return 0;
+        Sample p=null;float along=0,against=0,cross=0,total=0;
+        for(Sample s:history){
+            if(p!=null){
+                float dx=s.x-p.x,dy=s.y-p.y,q,c;
+                switch(cmd){
+                    case RIGHT:q=dx;c=Math.abs(dy);break;
+                    case LEFT:q=-dx;c=Math.abs(dy);break;
+                    case DOWN:q=dy;c=Math.abs(dx);break;
+                    case UP:q=-dy;c=Math.abs(dx);break;
+                    default:q=0;c=0;
+                }
+                if(q>=0)along+=q;else against+=-q;cross+=c;total+=Math.abs(q)+c;
+            }
+            p=s;
+        }
+        if(total<1e-5f)return 0;
+        float direction=along/(along+against+.0001f);
+        float straight=along/(along+cross+.0001f);
+        return direction*.6f+straight*.4f;
+    }
+
+    private static float dist3(float[] x,float[] y,float[] z,int a,int b){
+        float dx=x[a]-x[b],dy=y[a]-y[b],dz=z[a]-z[b];return(float)Math.sqrt(dx*dx+dy*dy+dz*dz);
+    }
 }
