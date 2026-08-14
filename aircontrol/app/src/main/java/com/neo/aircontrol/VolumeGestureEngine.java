@@ -15,7 +15,7 @@ public final class VolumeGestureEngine {
 
     private static final int ACTIVATE_FRAMES=4;
     private static final long HOLD_AFTER_LOSS_MS=260;
-    private static final long STEP_COOLDOWN_MS=260;
+    private static final long STEP_COOLDOWN_MS=280;
     private static final float MOVE_THRESHOLD=.075f;
     private static final float REARM_THRESHOLD=.030f;
 
@@ -83,10 +83,8 @@ public final class VolumeGestureEngine {
     private static int findThreeFingerHand(float[][] xs,float[][] ys,float[][] zs){
         if(xs==null||ys==null||zs==null)return -1;
         int n=Math.min(xs.length,Math.min(ys.length,zs.length));
-        for(int i=0;i<n;i++){
-            if(valid(xs[i],ys[i],zs[i])&&isThreeFingerPose(xs[i],ys[i],zs[i]))return i;
-        }
-        return -1;
+        if(n!=1)return -1;
+        return valid(xs[0],ys[0],zs[0])&&isThreeFingerPose(xs[0],ys[0],zs[0])?0:-1;
     }
 
     private static boolean isThreeFingerPose(float[] x,float[] y,float[] z){
