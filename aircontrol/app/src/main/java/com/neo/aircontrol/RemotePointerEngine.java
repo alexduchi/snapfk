@@ -20,15 +20,16 @@ public final class RemotePointerEngine {
     private static final long CLICK_COOLDOWN_MS=220;
     private static final float PINCH_ON=.55f, PINCH_OFF=.74f;
     private static final float CURSOR_MIN=.035f, CURSOR_MAX=.965f;
-    private static final float BASE_GAIN=1.55f;
-    private static final float POINTER_DEADZONE=.0022f;
-    private static final float MAX_FRAME_DELTA=.085f;
+    private static final float BASE_GAIN=1.48f;
+    private static final float POINTER_DEADZONE=.0032f;
+    private static final float MAX_FRAME_DELTA=.055f;
+    private static final float HARD_JUMP_DELTA=.13f;
 
     private final Result out=new Result();
-    private boolean active,pinching,dragging,haveFingerReference,havePinchFilter;
+    private boolean active,pinching,dragging,haveFingerReference,havePinchFilter,haveFilteredFinger;
     private int activationFrames,pinchOnFrames,pinchOffFrames;
     private long lastPairMs,pinchStartMs,clickCooldownUntil;
-    private float cx=.5f,cy=.5f,lastFingerX,lastFingerY,filteredPinch=9f;
+    private float cx=.5f,cy=.5f,lastFingerX,lastFingerY,filteredFingerX,filteredFingerY,filteredPinch=9f;
     private float sensitivity=1.15f;
 
     public void setSensitivity(float value){sensitivity=clamp(value,.60f,1.80f);}
@@ -58,7 +59,7 @@ public final class RemotePointerEngine {
             lastPairMs=now;
             activationFrames=Math.min(ACTIVATE_FRAMES,activationFrames+1);
             if(!active&&activationFrames>=ACTIVATE_FRAMES){
-                active=true;haveFingerReference=false;havePinchFilter=false;
+                active=true;haveFingerReference=false;haveFilteredFinger=false;havePinchFilter=false;
                 pinching=false;dragging=false;pinchOnFrames=pinchOffFrames=0;
             }
         }else activationFrames=0;
@@ -67,46 +68,56 @@ public final class RemotePointerEngine {
             if(pinching){
                 long held=now-pinchStartMs;
                 if(dragging)out.dragEnd=true;
-                else if(held>=45&&held<DRAG_HOLD_MS+180&&now>=clickCooldownUntil){
-                    out.tap=true;clickCooldownUntil=now+CLICK_COOLDOWN_MS;
-                }
+                else if(held>=45&&held<DRAG_HOLD_MS+180&&now>=clickCooldownUntil){out.tap=true;clickCooldownUntil=now+CLICK_COOLDOWN_MS;}
                 out.x=cx;out.y=cy;
             }
             active=false;pinching=false;dragging=false;
-            haveFingerReference=false;havePinchFilter=false;
+            haveFingerReference=false;haveFilteredFinger=false;havePinchFilter=false;
             pinchOnFrames=pinchOffFrames=0;
         }
 
         out.active=active;
         out.blockSwipes=active||pair||(lastPairMs>0&&now-lastPairMs<PAIR_HOLD_MS);
 
-        if(!active){
-            out.x=cx;out.y=cy;out.state=pair?"ARMING":"OFF";
-            return out;
-        }
-
+        if(!active){out.x=cx;out.y=cy;out.state=pair?"ARMING":"OFF";return out;}
         if(!pair){
-            haveFingerReference=false;
+            haveFingerReference=false;haveFilteredFinger=false;
             out.x=cx;out.y=cy;out.pinching=pinching;out.dragging=dragging;
             out.state=pinching?(dragging?"DRAG_HOLD":"PINCH_HOLD"):"MOUSE_HOLD";
             return out;
         }
 
         float[] x=xs[pointer],y=ys[pointer],z=zs[pointer];
-        float fingerX=x[INDEX_TIP],fingerY=y[INDEX_TIP];
+        float rawFingerX=x[INDEX_TIP],rawFingerY=y[INDEX_TIP];
+        if(!haveFilteredFinger){
+            filteredFingerX=rawFingerX;filteredFingerY=rawFingerY;haveFilteredFinger=true;
+        }else{
+            float rawDx=rawFingerX-filteredFingerX,rawDy=rawFingerY-filteredFingerY;
+            float rawDist=(float)Math.sqrt(rawDx*rawDx+rawDy*rawDy);
+            float alpha=rawDist>.045f?.72f:(rawDist>.018f?.52f:.34f);
+            filteredFingerX+=rawDx*alpha;filteredFingerY+=rawDy*alpha;
+        }
+
+        float fingerX=filteredFingerX,fingerY=filteredFingerY;
         if(!haveFingerReference){
             lastFingerX=fingerX;lastFingerY=fingerY;haveFingerReference=true;
         }else{
-            float dx=clamp(fingerX-lastFingerX,-MAX_FRAME_DELTA,MAX_FRAME_DELTA);
-            float dy=clamp(fingerY-lastFingerY,-MAX_FRAME_DELTA,MAX_FRAME_DELTA);
-            lastFingerX=fingerX;lastFingerY=fingerY;
-            float dist=(float)Math.sqrt(dx*dx+dy*dy);
-            if(dist>=POINTER_DEADZONE){
-                float acceleration=dist>.045f?1.18f:(dist>.018f?1.05f:.88f);
-                float gain=BASE_GAIN*sensitivity*acceleration;
-                // Complete inversion requested by the user: both axes move opposite to camera landmark motion.
-                cx=clamp(cx-dx*gain,CURSOR_MIN,CURSOR_MAX);
-                cy=clamp(cy-dy*gain,CURSOR_MIN,CURSOR_MAX);
+            float rawDx=fingerX-lastFingerX,rawDy=fingerY-lastFingerY;
+            float rawDist=(float)Math.sqrt(rawDx*rawDx+rawDy*rawDy);
+            if(rawDist>HARD_JUMP_DELTA){
+                // MediaPipe probably switched hands/landmarks for one frame: re-anchor instead of teleporting.
+                lastFingerX=fingerX;lastFingerY=fingerY;
+            }else{
+                float dx=clamp(rawDx,-MAX_FRAME_DELTA,MAX_FRAME_DELTA);
+                float dy=clamp(rawDy,-MAX_FRAME_DELTA,MAX_FRAME_DELTA);
+                lastFingerX=fingerX;lastFingerY=fingerY;
+                float dist=(float)Math.sqrt(dx*dx+dy*dy);
+                if(dist>=POINTER_DEADZONE){
+                    float acceleration=dist>.038f?1.14f:(dist>.017f?1.02f:.82f);
+                    float gain=BASE_GAIN*sensitivity*acceleration;
+                    cx=clamp(cx-dx*gain,CURSOR_MIN,CURSOR_MAX);
+                    cy=clamp(cy-dy*gain,CURSOR_MIN,CURSOR_MAX);
+                }
             }
         }
 
@@ -116,17 +127,12 @@ public final class RemotePointerEngine {
         float ratio=filteredPinch*.62f+rawPinch*.38f;
         out.pinchRatio=ratio;out.x=cx;out.y=cy;
 
-        boolean pinchCandidate=pinching
-                ? (ratio<PINCH_OFF || rawPinch<PINCH_ON+.08f)
-                : (ratio<PINCH_ON || rawPinch<PINCH_ON-.04f);
-
+        boolean pinchCandidate=pinching?(ratio<PINCH_OFF||rawPinch<PINCH_ON+.08f):(ratio<PINCH_ON||rawPinch<PINCH_ON-.04f);
         if(!pinching){
             pinchOffFrames=0;
             if(pinchCandidate&&now>=clickCooldownUntil){
                 pinchOnFrames++;
-                if(pinchOnFrames>=2){
-                    pinching=true;dragging=false;pinchStartMs=now;pinchOnFrames=0;
-                }
+                if(pinchOnFrames>=2){pinching=true;dragging=false;pinchStartMs=now;pinchOnFrames=0;}
             }else pinchOnFrames=0;
         }else{
             pinchOnFrames=0;
@@ -135,16 +141,13 @@ public final class RemotePointerEngine {
                 if(pinchOffFrames>=2){
                     long held=now-pinchStartMs;
                     if(dragging){out.dragEnd=true;dragging=false;}
-                    else if(held>=45&&now>=clickCooldownUntil){
-                        out.tap=true;clickCooldownUntil=now+CLICK_COOLDOWN_MS;
-                    }
+                    else if(held>=45&&now>=clickCooldownUntil){out.tap=true;clickCooldownUntil=now+CLICK_COOLDOWN_MS;}
                     pinching=false;pinchOffFrames=0;
                 }else if(dragging)out.dragMove=true;
             }else{
                 pinchOffFrames=0;
-                if(!dragging&&now-pinchStartMs>=DRAG_HOLD_MS){
-                    dragging=true;out.dragStart=true;
-                }else if(dragging)out.dragMove=true;
+                if(!dragging&&now-pinchStartMs>=DRAG_HOLD_MS){dragging=true;out.dragStart=true;}
+                else if(dragging)out.dragMove=true;
             }
         }
 
@@ -161,60 +164,18 @@ public final class RemotePointerEngine {
     public boolean isActive(){return active;}
 
     public void reset(){
-        active=pinching=dragging=haveFingerReference=havePinchFilter=false;
+        active=pinching=dragging=haveFingerReference=haveFilteredFinger=havePinchFilter=false;
         activationFrames=pinchOnFrames=pinchOffFrames=0;
-        lastPairMs=pinchStartMs=clickCooldownUntil=0;cx=cy=.5f;filteredPinch=9f;
-        clearEvents();out.state="OFF";
+        lastPairMs=pinchStartMs=clickCooldownUntil=0;cx=cy=.5f;filteredPinch=9f;clearEvents();out.state="OFF";
     }
 
-    private void clearEvents(){
-        out.tap=out.dragStart=out.dragMove=out.dragEnd=false;
-        out.pairFound=false;out.pinchRatio=9f;
-    }
-
-    private static boolean valid(float[][] xs,float[][] ys,float[][] zs,int i){
-        return ys!=null&&zs!=null&&i>=0&&i<xs.length&&i<ys.length&&i<zs.length
-                &&xs[i]!=null&&ys[i]!=null&&zs[i]!=null&&xs[i].length>=21&&ys[i].length>=21&&zs[i].length>=21;
-    }
-
-    private static boolean isFist(float[] x,float[] y,float[] z){
-        int extended=0;
-        if(fingerExtended(x,y,z,INDEX_MCP,INDEX_PIP,INDEX_TIP))extended++;
-        if(fingerExtended(x,y,z,MIDDLE_MCP,MIDDLE_PIP,MIDDLE_TIP))extended++;
-        if(fingerExtended(x,y,z,RING_MCP,RING_PIP,RING_TIP))extended++;
-        if(fingerExtended(x,y,z,PINKY_MCP,PINKY_PIP,PINKY_TIP))extended++;
-        return extended==0;
-    }
-
-    private static boolean isPointer(float[] x,float[] y,float[] z){
-        if(!fingerExtended(x,y,z,INDEX_MCP,INDEX_PIP,INDEX_TIP))return false;
-        int folded=0;
-        if(!fingerExtended(x,y,z,MIDDLE_MCP,MIDDLE_PIP,MIDDLE_TIP))folded++;
-        if(!fingerExtended(x,y,z,RING_MCP,RING_PIP,RING_TIP))folded++;
-        if(!fingerExtended(x,y,z,PINKY_MCP,PINKY_PIP,PINKY_TIP))folded++;
-        return folded>=2;
-    }
-
-    private static boolean fingerExtended(float[] x,float[] y,float[] z,int mcp,int pip,int tip){
-        float ax=x[mcp]-x[pip],ay=y[mcp]-y[pip],az=z[mcp]-z[pip];
-        float bx=x[tip]-x[pip],by=y[tip]-y[pip],bz=z[tip]-z[pip];
-        float an=(float)Math.sqrt(ax*ax+ay*ay+az*az),bn=(float)Math.sqrt(bx*bx+by*by+bz*bz);
-        if(an<1e-4f||bn<1e-4f)return false;
-        float cos=(ax*bx+ay*by+az*bz)/(an*bn);
-        float wristTip=dist3(x,y,z,WRIST,tip),wristPip=dist3(x,y,z,WRIST,pip);
-        return cos<-.48f&&wristTip>wristPip*1.05f;
-    }
-
-    private static float pinchRatio2d(float[] x,float[] y){
-        float palm=Math.max(.025f,dist2(x,y,INDEX_MCP,PINKY_MCP));
-        return dist2(x,y,THUMB_TIP,INDEX_TIP)/palm;
-    }
-
-    private static float dist2(float[] x,float[] y,int a,int b){
-        float dx=x[a]-x[b],dy=y[a]-y[b];return(float)Math.sqrt(dx*dx+dy*dy);
-    }
-    private static float dist3(float[] x,float[] y,float[] z,int a,int b){
-        float dx=x[a]-x[b],dy=y[a]-y[b],dz=z[a]-z[b];return(float)Math.sqrt(dx*dx+dy*dy+dz*dz);
-    }
+    private void clearEvents(){out.tap=out.dragStart=out.dragMove=out.dragEnd=false;out.pairFound=false;out.pinchRatio=9f;}
+    private static boolean valid(float[][] xs,float[][] ys,float[][] zs,int i){return ys!=null&&zs!=null&&i>=0&&i<xs.length&&i<ys.length&&i<zs.length&&xs[i]!=null&&ys[i]!=null&&zs[i]!=null&&xs[i].length>=21&&ys[i].length>=21&&zs[i].length>=21;}
+    private static boolean isFist(float[] x,float[] y,float[] z){int extended=0;if(fingerExtended(x,y,z,INDEX_MCP,INDEX_PIP,INDEX_TIP))extended++;if(fingerExtended(x,y,z,MIDDLE_MCP,MIDDLE_PIP,MIDDLE_TIP))extended++;if(fingerExtended(x,y,z,RING_MCP,RING_PIP,RING_TIP))extended++;if(fingerExtended(x,y,z,PINKY_MCP,PINKY_PIP,PINKY_TIP))extended++;return extended==0;}
+    private static boolean isPointer(float[] x,float[] y,float[] z){if(!fingerExtended(x,y,z,INDEX_MCP,INDEX_PIP,INDEX_TIP))return false;int folded=0;if(!fingerExtended(x,y,z,MIDDLE_MCP,MIDDLE_PIP,MIDDLE_TIP))folded++;if(!fingerExtended(x,y,z,RING_MCP,RING_PIP,RING_TIP))folded++;if(!fingerExtended(x,y,z,PINKY_MCP,PINKY_PIP,PINKY_TIP))folded++;return folded>=2;}
+    private static boolean fingerExtended(float[] x,float[] y,float[] z,int mcp,int pip,int tip){float ax=x[mcp]-x[pip],ay=y[mcp]-y[pip],az=z[mcp]-z[pip];float bx=x[tip]-x[pip],by=y[tip]-y[pip],bz=z[tip]-z[pip];float an=(float)Math.sqrt(ax*ax+ay*ay+az*az),bn=(float)Math.sqrt(bx*bx+by*by+bz*bz);if(an<1e-4f||bn<1e-4f)return false;float cos=(ax*bx+ay*by+az*bz)/(an*bn);float wristTip=dist3(x,y,z,WRIST,tip),wristPip=dist3(x,y,z,WRIST,pip);return cos<-.48f&&wristTip>wristPip*1.05f;}
+    private static float pinchRatio2d(float[] x,float[] y){float palm=Math.max(.025f,dist2(x,y,INDEX_MCP,PINKY_MCP));return dist2(x,y,THUMB_TIP,INDEX_TIP)/palm;}
+    private static float dist2(float[] x,float[] y,int a,int b){float dx=x[a]-x[b],dy=y[a]-y[b];return(float)Math.sqrt(dx*dx+dy*dy);}
+    private static float dist3(float[] x,float[] y,float[] z,int a,int b){float dx=x[a]-x[b],dy=y[a]-y[b],dz=z[a]-z[b];return(float)Math.sqrt(dx*dx+dy*dy+dz*dz);}
     private static float clamp(float v,float lo,float hi){return v<lo?lo:(v>hi?hi:v);}
 }
