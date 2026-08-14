@@ -18,7 +18,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class MediaPipeHandTracker implements AutoCloseable {
     public interface Listener {
-        void onLandmarks(float[] x,float[] y,float[] z,long timestampMs,long inferenceMs);
+        void onHands(float[][] x,float[][] y,float[][] z,long timestampMs,long inferenceMs);
         void onNoHand(long timestampMs,long inferenceMs);
         void onError(String message);
     }
@@ -36,7 +36,7 @@ public final class MediaPipeHandTracker implements AutoCloseable {
             HandLandmarker.HandLandmarkerOptions options=HandLandmarker.HandLandmarkerOptions.builder()
                     .setBaseOptions(base)
                     .setRunningMode(RunningMode.LIVE_STREAM)
-                    .setNumHands(1)
+                    .setNumHands(2)
                     .setMinHandDetectionConfidence(0.20f)
                     .setMinHandPresenceConfidence(0.18f)
                     .setMinTrackingConfidence(0.20f)
@@ -57,10 +57,23 @@ public final class MediaPipeHandTracker implements AutoCloseable {
     private void handleResult(HandLandmarkerResult result){
         busy.set(false);long now=SystemClock.uptimeMillis();long inference=Math.max(0,now-result.timestampMs());
         List<List<NormalizedLandmark>> hands=result.landmarks();
-        if(hands==null||hands.isEmpty()||hands.get(0).size()<21){listener.onNoHand(result.timestampMs(),inference);return;}
-        List<NormalizedLandmark> lm=hands.get(0);float[] x=new float[21],y=new float[21],z=new float[21];
-        for(int i=0;i<21;i++){NormalizedLandmark p=lm.get(i);x[i]=p.x();y[i]=p.y();z[i]=p.z();}
-        listener.onLandmarks(x,y,z,result.timestampMs(),inference);
+        if(hands==null||hands.isEmpty()){listener.onNoHand(result.timestampMs(),inference);return;}
+        int n=Math.min(2,hands.size());
+        float[][] xs=new float[n][21],ys=new float[n][21],zs=new float[n][21];
+        int valid=0;
+        for(int h=0;h<n;h++){
+            List<NormalizedLandmark> lm=hands.get(h);
+            if(lm==null||lm.size()<21)continue;
+            for(int i=0;i<21;i++){NormalizedLandmark p=lm.get(i);xs[valid][i]=p.x();ys[valid][i]=p.y();zs[valid][i]=p.z();}
+            valid++;
+        }
+        if(valid==0){listener.onNoHand(result.timestampMs(),inference);return;}
+        if(valid<n){
+            float[][] nx=new float[valid][21],ny=new float[valid][21],nz=new float[valid][21];
+            for(int h=0;h<valid;h++){System.arraycopy(xs[h],0,nx[h],0,21);System.arraycopy(ys[h],0,ny[h],0,21);System.arraycopy(zs[h],0,nz[h],0,21);}
+            xs=nx;ys=ny;zs=nz;
+        }
+        listener.onHands(xs,ys,zs,result.timestampMs(),inference);
     }
 
     public boolean ready(){return landmarker!=null;}
