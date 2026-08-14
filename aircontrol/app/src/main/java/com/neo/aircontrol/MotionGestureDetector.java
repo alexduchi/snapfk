@@ -1,43 +1,38 @@
 package com.neo.aircontrol;
 
-import java.util.ArrayDeque;
-import java.util.Arrays;
+import java.util.*;
 
 public final class MotionGestureDetector {
-    private static final int GW=64, GH=48, N=GW*GH;
-    private static final int DIFF=22, GATE_FRAMES=4;
-    private static final float MIN_AREA=.018f, MAX_AREA=.48f, MIN_DISP=.14f, MIN_SPEED=.42f, DOM=1.55f;
-    private static final long GRACE=320, COOLDOWN=430;
-    private final int[] bg=new int[N], cur=new int[N], queue=new int[N], top=new int[GW], smooth=new int[GW];
-    private final boolean[] mask=new boolean[N];
+    public static final class DebugState { public boolean calibrated,calibrating,handFound,twoFingerGate,armed; public int calibrationFrame,peaks,gateFrames,rotation; public float x,y,areaRatio,foregroundRatio,skinRatio; public String state="START"; }
+    private static final int GW=96,GH=72,N=GW*GH,CAL=14,GATE=3;
+    private static final float MIN_AREA=.010f,MAX_AREA=.34f,MIN_DISP=.105f,MIN_SPEED=.30f,DOM=1.35f;
+    private static final long GRACE=700,COOLDOWN=380;
+    private final int[] bgY=new int[N],bgCb=new int[N],bgCr=new int[N],y=new int[N],cb=new int[N],cr=new int[N],labels=new int[N],queue=new int[N],top=new int[GW],smooth=new int[GW];
+    private final long[] sy=new long[N],scb=new long[N],scr=new long[N];
+    private final boolean[] raw=new boolean[N],mask=new boolean[N];
     private final ArrayDeque<S> hist=new ArrayDeque<>();
-    private boolean calibrated, armed; private int gate; private long lastGate,cooldown,anchorT; private float ax,ay;
-    public static final class DebugState { public boolean calibrated,twoFingerGate,armed; public float x,y,areaRatio; public int peaks; public String state="WAIT_CALIBRATION"; }
-    private final DebugState debug=new DebugState();
-    private static final class S { float x,y; long t; S(float x,float y,long t){this.x=x;this.y=y;this.t=t;} }
-    private static final class C { int count,minX,maxX,minY,maxY; float cx,cy; }
-    private static final class P { boolean valid; int count; float x,y; }
-    public DebugState debug(){return debug;}
-    public void calibrate(byte[] nv21,int w,int h){ sample(nv21,w,h,bg);calibrated=true;armed=false;gate=0;hist.clear();debug.calibrated=true;debug.state="IDLE"; }
-    public GestureCommand process(byte[] nv21,int w,int h,long now){
-        if(!calibrated)return GestureCommand.NONE; sample(nv21,w,h,cur);
-        for(int i=0;i<N;i++)mask[i]=Math.abs(cur[i]-bg[i])>=DIFF;
-        C c=largest(); if(c==null){gate=0;if(armed&&now-lastGate>GRACE)disarm();debug.twoFingerGate=false;debug.armed=armed;debug.state=armed?"ARMED_GRACE":"IDLE";return GestureCommand.NONE;}
-        float ar=c.count/(float)N; debug.areaRatio=ar; if(ar<MIN_AREA||ar>MAX_AREA){gate=0;if(armed&&now-lastGate>GRACE)disarm();debug.state="REJECT_AREA";return GestureCommand.NONE;}
-        P p=peaks(c); debug.peaks=p.count; debug.twoFingerGate=p.valid; float x=p.valid?p.x:c.cx,y=p.valid?p.y:c.cy; debug.x=x;debug.y=y;
-        if(p.valid){lastGate=now;gate++;if(!armed&&gate>=GATE_FRAMES&&now>=cooldown){armed=true;ax=x;ay=y;anchorT=now;hist.clear();hist.add(new S(x,y,now));}}
-        else {gate=0;if(!armed||now-lastGate>GRACE){if(armed)disarm();debug.armed=false;debug.state="IDLE";return GestureCommand.NONE;}}
-        if(!armed){debug.armed=false;debug.state="GATE_"+gate+"/"+GATE_FRAMES;return GestureCommand.NONE;}
-        debug.armed=true;debug.state="ARMED";hist.addLast(new S(x,y,now));while(hist.size()>10||(!hist.isEmpty()&&now-hist.peekFirst().t>550))hist.removeFirst();
-        long dt=Math.max(1,now-anchorT);float dx=x-ax,dy=y-ay,adx=Math.abs(dx),ady=Math.abs(dy),dist=Math.max(adx,ady),speed=dist/(dt/1000f);
-        if(dt>260&&speed<.22f){ax=ax*.75f+x*.25f;ay=ay*.75f+y*.25f;anchorT=now;return GestureCommand.NONE;}
-        if(dist<MIN_DISP||speed<MIN_SPEED)return GestureCommand.NONE; GestureCommand cmd=GestureCommand.NONE;
-        if(adx>ady*DOM)cmd=dx>0?GestureCommand.RIGHT:GestureCommand.LEFT;else if(ady>adx*DOM)cmd=dy>0?GestureCommand.DOWN:GestureCommand.UP;
-        if(cmd!=GestureCommand.NONE&&coherent(cmd)){cooldown=now+COOLDOWN;disarm();debug.state="FIRED_"+cmd.name();return cmd;}return GestureCommand.NONE;
-    }
-    private boolean coherent(GestureCommand cmd){if(hist.size()<3)return false;S prev=null;float good=0,bad=0;for(S s:hist){if(prev!=null){float d=0;switch(cmd){case RIGHT:d=s.x-prev.x;break;case LEFT:d=prev.x-s.x;break;case DOWN:d=s.y-prev.y;break;case UP:d=prev.y-s.y;break;default:}if(d>=0)good+=d;else bad+=-d;}prev=s;}return good>.06f&&good>bad*2.3f;}
-    private void disarm(){armed=false;gate=0;hist.clear();}
-    private void sample(byte[] a,int w,int h,int[] out){for(int gy=0;gy<GH;gy++){int sy=gy*h/GH,row=sy*w;for(int gx=0;gx<GW;gx++){int sx=gx*w/GW;out[gy*GW+gx]=a[row+sx]&255;}}}
-    private C largest(){boolean[] seen=new boolean[N];C best=null;int bestN=0;for(int i=0;i<N;i++){if(!mask[i]||seen[i])continue;int qh=0,qt=0,count=0,sx=0,sy=0,minx=GW,miny=GH,maxx=0,maxy=0;queue[qt++]=i;seen[i]=true;while(qh<qt){int v=queue[qh++],x=v%GW,y=v/GW;count++;sx+=x;sy+=y;if(x<minx)minx=x;if(x>maxx)maxx=x;if(y<miny)miny=y;if(y>maxy)maxy=y;int n;if(x>0){n=v-1;if(mask[n]&&!seen[n]){seen[n]=true;queue[qt++]=n;}}if(x+1<GW){n=v+1;if(mask[n]&&!seen[n]){seen[n]=true;queue[qt++]=n;}}if(y>0){n=v-GW;if(mask[n]&&!seen[n]){seen[n]=true;queue[qt++]=n;}}if(y+1<GH){n=v+GW;if(mask[n]&&!seen[n]){seen[n]=true;queue[qt++]=n;}}}if(count>bestN){bestN=count;best=new C();best.count=count;best.minX=minx;best.maxX=maxx;best.minY=miny;best.maxY=maxy;best.cx=(sx/(float)count)/(GW-1);best.cy=(sy/(float)count)/(GH-1);}}return best;}
-    private P peaks(C c){Arrays.fill(top,GH);for(int x=c.minX;x<=c.maxX;x++)for(int y=c.minY;y<=c.maxY;y++)if(mask[y*GW+x]){top[x]=y;break;}for(int x=c.minX;x<=c.maxX;x++){int sum=0,n=0;for(int k=-2;k<=2;k++){int xx=x+k;if(xx>=c.minX&&xx<=c.maxX&&top[xx]<GH){sum+=top[xx];n++;}}smooth[x]=n==0?GH:sum/n;}int b1=-1,b2=-1,p1=0,p2=0,count=0;for(int x=c.minX+3;x<=c.maxX-3;x++){int y=smooth[x];if(y>=GH)continue;int prom=Math.min(smooth[x-3],smooth[x+3])-y;if(prom>=2&&y<=smooth[x-1]&&y<=smooth[x+1]){count++;if(prom>p1){b2=b1;p2=p1;b1=x;p1=prom;}else if(prom>p2){b2=x;p2=prom;}}}P r=new P();r.count=count;if(b1>=0&&b2>=0){int sep=Math.abs(b1-b2),bw=Math.max(1,c.maxX-c.minX+1),y1=smooth[b1],y2=smooth[b2];boolean sepOk=sep>=Math.max(5,bw/6)&&sep<=Math.max(8,(bw*3)/4),heightOk=Math.abs(y1-y2)<=Math.max(5,(c.maxY-c.minY)/3),upper=y1<c.minY+(c.maxY-c.minY)*.55f&&y2<c.minY+(c.maxY-c.minY)*.55f;if(sepOk&&heightOk&&upper){r.valid=true;r.x=((b1+b2)*.5f)/(GW-1);r.y=((y1+y2)*.5f)/(GH-1);}}return r;}
+    private boolean calibrated,calibrating,armed,mirror=true; private int calFrame,gate,rot; private long lastGate,cooldown,anchorT; private float ax,ay; private final DebugState d=new DebugState();
+    private static final class S{final float x,y;final long t;S(float x,float y,long t){this.x=x;this.y=y;this.t=t;}}
+    private static final class C{int label,count,minX,maxX,minY,maxY;float cx,cy;}
+    private static final class P{boolean valid;int count;}
+    public DebugState debug(){return d;}
+    public void setFrameTransform(int degrees,boolean m){rot=((degrees%360)+360)%360;if(rot!=0&&rot!=90&&rot!=180&&rot!=270)rot=0;mirror=m;d.rotation=rot;}
+    public void reset(){calibrated=calibrating=armed=false;calFrame=gate=0;hist.clear();d.calibrated=d.calibrating=false;d.state="WAIT_CALIBRATION";}
+    public void beginCalibration(){calibrating=true;calibrated=false;calFrame=gate=0;armed=false;hist.clear();Arrays.fill(sy,0);Arrays.fill(scb,0);Arrays.fill(scr,0);d.calibrating=true;d.calibrationFrame=0;d.state="CALIBRATING";}
+    public GestureCommand process(byte[] a,int w,int h,long now){sample(a,w,h);if(calibrating){for(int i=0;i<N;i++){sy[i]+=y[i];scb[i]+=cb[i];scr[i]+=cr[i];}calFrame++;d.calibrationFrame=calFrame;d.state="CALIBRATING_"+calFrame+"/"+CAL;if(calFrame>=CAL){for(int i=0;i<N;i++){bgY[i]=(int)(sy[i]/calFrame);bgCb[i]=(int)(scb[i]/calFrame);bgCr[i]=(int)(scr[i]/calFrame);}calibrating=false;calibrated=true;d.calibrating=false;d.calibrated=true;d.state="READY";}return GestureCommand.NONE;}if(!calibrated)return GestureCommand.NONE;
+        buildMask();C c=largest();if(c==null){gate=0;d.handFound=d.twoFingerGate=false;if(armed&&now-lastGate>GRACE)disarm();d.armed=armed;d.state=armed?"ARMED_GRACE":"NO_HAND";adapt();return GestureCommand.NONE;}
+        d.handFound=true;d.areaRatio=c.count/(float)N;d.x=c.cx;d.y=c.cy;P p=peaks(c);d.peaks=p.count;d.twoFingerGate=p.valid;
+        if(p.valid){lastGate=now;gate++;if(!armed&&gate>=GATE&&now>=cooldown){armed=true;ax=c.cx;ay=c.cy;anchorT=now;hist.clear();hist.add(new S(c.cx,c.cy,now));}}else if(!armed)gate=Math.max(0,gate-1);else if(now-lastGate>GRACE)disarm();d.gateFrames=gate;
+        if(!armed){d.armed=false;d.state=p.valid?"GATE_"+gate+"/"+GATE:"HAND_NO_V";return GestureCommand.NONE;}d.armed=true;d.state=p.valid?"ARMED_V":"ARMED_TRACK";
+        float x0=c.cx,y0=c.cy;hist.addLast(new S(x0,y0,now));while(hist.size()>12||(!hist.isEmpty()&&now-hist.peekFirst().t>650))hist.removeFirst();long dt=Math.max(1,now-anchorT);float dx=x0-ax,dy=y0-ay,adx=Math.abs(dx),ady=Math.abs(dy),dist=Math.max(adx,ady),speed=dist/(dt/1000f);
+        if(dt>300&&speed<.18f){ax=ax*.72f+x0*.28f;ay=ay*.72f+y0*.28f;anchorT=now;hist.clear();hist.add(new S(x0,y0,now));d.state="REPOSITION";return GestureCommand.NONE;}if(dist<MIN_DISP||speed<MIN_SPEED)return GestureCommand.NONE;
+        GestureCommand cmd=GestureCommand.NONE;if(adx>ady*DOM)cmd=dx>0?GestureCommand.RIGHT:GestureCommand.LEFT;else if(ady>adx*DOM)cmd=dy>0?GestureCommand.DOWN:GestureCommand.UP;if(cmd!=GestureCommand.NONE&&coherent(cmd)){cooldown=now+COOLDOWN;disarm();d.state="FIRED_"+cmd.name();return cmd;}return GestureCommand.NONE;}
+    private void buildMask(){long ss=0;for(int i=0;i<N;i++)ss+=y[i]-bgY[i];int shift=(int)(ss/N),fg=0,skinN=0;for(int i=0;i<N;i++){int yy=y[i],cc=cb[i],rr=cr[i],dy=Math.abs((yy-bgY[i])-shift),dc=Math.abs(cc-bgCb[i])+Math.abs(rr-bgCr[i]);boolean f=dy>=11||dc>=16,skin=yy>=28&&cc>=72&&cc<=148&&rr>=118&&rr<=190&&rr>cc-2;if(skin)skinN++;raw[i]=f&&(skin||dc>=30);if(raw[i])fg++;}d.foregroundRatio=fg/(float)N;d.skinRatio=skinN/(float)N;Arrays.fill(mask,false);for(int yy=1;yy<GH-1;yy++)for(int x=1;x<GW-1;x++){int n=0;for(int yy2=yy-1;yy2<=yy+1;yy2++)for(int xx=x-1;xx<=x+1;xx++)if(raw[yy2*GW+xx])n++;mask[yy*GW+x]=n>=3;}}
+    private C largest(){Arrays.fill(labels,0);int lab=0;C best=null;float bestScore=-1;for(int i=0;i<N;i++){if(!mask[i]||labels[i]!=0)continue;lab++;int qh=0,qt=0,count=0,sx=0,sy=0,minx=GW,miny=GH,maxx=0,maxy=0;queue[qt++]=i;labels[i]=lab;while(qh<qt){int v=queue[qh++],x=v%GW,yy=v/GW;count++;sx+=x;sy+=yy;if(x<minx)minx=x;if(x>maxx)maxx=x;if(yy<miny)miny=yy;if(yy>maxy)maxy=yy;int n;if(x>0){n=v-1;if(mask[n]&&labels[n]==0){labels[n]=lab;queue[qt++]=n;}}if(x+1<GW){n=v+1;if(mask[n]&&labels[n]==0){labels[n]=lab;queue[qt++]=n;}}if(yy>0){n=v-GW;if(mask[n]&&labels[n]==0){labels[n]=lab;queue[qt++]=n;}}if(yy+1<GH){n=v+GW;if(mask[n]&&labels[n]==0){labels[n]=lab;queue[qt++]=n;}}}float ar=count/(float)N;int bw=maxx-minx+1,bh=maxy-miny+1;if(ar<MIN_AREA||ar>MAX_AREA||bw<7||bh<9)continue;float score=count*((minx<=1||maxx>=GW-2||miny<=1||maxy>=GH-2)?.75f:1f);if(score>bestScore){bestScore=score;best=new C();best.label=lab;best.count=count;best.minX=minx;best.maxX=maxx;best.minY=miny;best.maxY=maxy;best.cx=(sx/(float)count)/(GW-1);best.cy=(sy/(float)count)/(GH-1);}}return best;}
+    private P peaks(C c){Arrays.fill(top,GH);for(int x=c.minX;x<=c.maxX;x++)for(int yy=c.minY;yy<=c.maxY;yy++)if(labels[yy*GW+x]==c.label){top[x]=yy;break;}for(int x=c.minX;x<=c.maxX;x++){int sum=0,n=0;for(int k=-2;k<=2;k++){int xx=x+k;if(xx>=c.minX&&xx<=c.maxX&&top[xx]<GH){sum+=top[xx];n++;}}smooth[x]=n==0?GH:sum/n;}int bw=c.maxX-c.minX+1,bh=c.maxY-c.minY+1,span=Math.max(3,bw/10),need=Math.max(2,bh/12),b1=-1,b2=-1,s1=-999,s2=-999,count=0;for(int x=c.minX+span;x<=c.maxX-span;x++){int yy=smooth[x];if(yy>=GH)continue;int pr=Math.min(smooth[x-span],smooth[x+span])-yy;boolean local=yy<=smooth[Math.max(c.minX,x-1)]&&yy<=smooth[Math.min(c.maxX,x+1)],upper=yy<=c.minY+(int)(bh*.52f);if(local&&upper&&pr>=need){count++;int sc=pr*5-yy;if(sc>s1){b2=b1;s2=s1;b1=x;s1=sc;}else if(sc>s2){b2=x;s2=sc;}}}P r=new P();r.count=count;if(b1<0||b2<0)return r;if(b1>b2){int t=b1;b1=b2;b2=t;}int sep=b2-b1,y1=smooth[b1],y2=smooth[b2],val=Math.max(y1,y2);for(int x=b1+1;x<b2;x++)val=Math.max(val,smooth[x]);r.valid=sep>=Math.max(6,bw/7)&&sep<=Math.max(10,bw*4/5)&&Math.abs(y1-y2)<=Math.max(6,bh/3)&&val-Math.max(y1,y2)>=Math.max(2,bh/12)&&c.maxY-Math.max(y1,y2)>=Math.max(10,bh/2);return r;}
+    private void adapt(){for(int i=0;i<N;i++)if(!raw[i]){bgY[i]=(bgY[i]*31+y[i])/32;bgCb[i]=(bgCb[i]*31+cb[i])/32;bgCr[i]=(bgCr[i]*31+cr[i])/32;}}
+    private boolean coherent(GestureCommand cmd){if(hist.size()<3)return false;S p=null;float along=0,against=0,cross=0;for(S s:hist){if(p!=null){float dx=s.x-p.x,dy=s.y-p.y,q,c;switch(cmd){case RIGHT:q=dx;c=Math.abs(dy);break;case LEFT:q=-dx;c=Math.abs(dy);break;case DOWN:q=dy;c=Math.abs(dx);break;case UP:q=-dy;c=Math.abs(dx);break;default:q=c=0;}if(q>=0)along+=q;else against+=-q;cross+=c;}p=s;}return along>.045f&&along>against*1.8f&&along>cross*.80f;}
+    private void disarm(){armed=false;gate=0;hist.clear();d.armed=false;}
+    private void sample(byte[] a,int w,int h){int fs=w*h;for(int gy=0;gy<GH;gy++){float v=(gy+.5f)/GH;for(int gx=0;gx<GW;gx++){float u=(gx+.5f)/GW;if(mirror)u=1-u;float rx,ry;switch(rot){case 90:rx=v;ry=1-u;break;case 180:rx=1-u;ry=1-v;break;case 270:rx=1-v;ry=u;break;default:rx=u;ry=v;}int sx=clamp((int)(rx*w),0,w-1),sy0=clamp((int)(ry*h),0,h-1),idx=sy0*w+sx,uv=fs+(sy0>>1)*w+((sx>>1)<<1),o=gy*GW+gx;y[o]=a[idx]&255;if(uv+1<a.length){cr[o]=a[uv]&255;cb[o]=a[uv+1]&255;}else{cr[o]=cb[o]=128;}}}}
+    private static int clamp(int v,int lo,int hi){return v<lo?lo:v>hi?hi:v;}
 }
