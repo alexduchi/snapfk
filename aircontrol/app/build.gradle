@@ -7,8 +7,8 @@ android {
         applicationId 'com.neo.aircontrol'
         minSdk 26
         targetSdk 35
-        versionCode 13
-        versionName '7.3-inverted-mouse-click-volume'
+        versionCode 14
+        versionName '7.4-stable-pointer-volume-fix'
     }
 }
 
