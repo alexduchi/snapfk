@@ -19,12 +19,20 @@ public final class RemotePointerEngine {
     private static final long DRAG_HOLD_MS=380;
     private static final long CLICK_COOLDOWN_MS=260;
     private static final float PINCH_ON=.43f, PINCH_OFF=.58f;
+    private static final float CURSOR_MIN=.035f, CURSOR_MAX=.965f;
+    private static final float BASE_GAIN=1.55f;
+    private static final float POINTER_DEADZONE=.0022f;
+    private static final float MAX_FRAME_DELTA=.085f;
 
     private final Result out=new Result();
-    private boolean active,pinching,dragging,haveCursor;
+    private boolean active,pinching,dragging,haveFingerReference;
     private int activationFrames,pinchOnFrames,pinchOffFrames;
     private long lastPairMs,pinchStartMs,clickCooldownUntil;
-    private float cx=.5f,cy=.5f;
+    private float cx=.5f,cy=.5f,lastFingerX,lastFingerY;
+    private float sensitivity=1.15f;
+
+    public void setSensitivity(float value){sensitivity=clamp(value,.60f,1.80f);}
+    public float getSensitivity(){return sensitivity;}
 
     public Result process(float[][] xs,float[][] ys,float[][] zs,long now){
         clearEvents();
@@ -50,7 +58,7 @@ public final class RemotePointerEngine {
             lastPairMs=now;
             activationFrames=Math.min(ACTIVATE_FRAMES,activationFrames+1);
             if(!active&&activationFrames>=ACTIVATE_FRAMES){
-                active=true;haveCursor=false;pinching=false;dragging=false;pinchOnFrames=pinchOffFrames=0;
+                active=true;haveFingerReference=false;pinching=false;dragging=false;pinchOnFrames=pinchOffFrames=0;
             }
         }else{
             activationFrames=0;
@@ -58,7 +66,7 @@ public final class RemotePointerEngine {
 
         if(active&&now-lastPairMs>PAIR_HOLD_MS){
             if(dragging){out.dragEnd=true;out.x=cx;out.y=cy;}
-            active=false;pinching=false;dragging=false;haveCursor=false;
+            active=false;pinching=false;dragging=false;haveFingerReference=false;
             pinchOnFrames=pinchOffFrames=0;
         }
 
@@ -71,18 +79,27 @@ public final class RemotePointerEngine {
         }
 
         if(!pair){
+            haveFingerReference=false;
             out.x=cx;out.y=cy;out.pinching=pinching;out.dragging=dragging;out.state="MOUSE_HOLD";
             return out;
         }
 
         float[] x=xs[pointer],y=ys[pointer],z=zs[pointer];
-        float tx=clamp(.5f+(x[INDEX_TIP]-.5f)*1.38f,.015f,.985f);
-        float ty=clamp(.5f+(y[INDEX_TIP]-.5f)*1.28f,.015f,.985f);
-        if(!haveCursor){cx=tx;cy=ty;haveCursor=true;}
-        else{
-            float ddx=tx-cx,ddy=ty-cy,dist=(float)Math.sqrt(ddx*ddx+ddy*ddy);
-            float alpha=dist>.12f?.78f:(dist>.045f?.62f:.43f);
-            cx+=ddx*alpha;cy+=ddy*alpha;
+        float fingerX=x[INDEX_TIP],fingerY=y[INDEX_TIP];
+        if(!haveFingerReference){
+            lastFingerX=fingerX;lastFingerY=fingerY;haveFingerReference=true;
+        }else{
+            float dx=clamp(fingerX-lastFingerX,-MAX_FRAME_DELTA,MAX_FRAME_DELTA);
+            float dy=clamp(fingerY-lastFingerY,-MAX_FRAME_DELTA,MAX_FRAME_DELTA);
+            lastFingerX=fingerX;lastFingerY=fingerY;
+
+            float dist=(float)Math.sqrt(dx*dx+dy*dy);
+            if(dist>=POINTER_DEADZONE){
+                float acceleration=dist>.045f?1.18f:(dist>.018f?1.05f:.88f);
+                float gain=BASE_GAIN*sensitivity*acceleration;
+                cx=clamp(cx+dx*gain,CURSOR_MIN,CURSOR_MAX);
+                cy=clamp(cy+dy*gain,CURSOR_MIN,CURSOR_MAX);
+            }
         }
 
         float ratio=pinchRatio(x,y,z);
@@ -127,7 +144,7 @@ public final class RemotePointerEngine {
     public boolean isActive(){return active;}
 
     public void reset(){
-        active=pinching=dragging=haveCursor=false;activationFrames=pinchOnFrames=pinchOffFrames=0;
+        active=pinching=dragging=haveFingerReference=false;activationFrames=pinchOnFrames=pinchOffFrames=0;
         lastPairMs=pinchStartMs=clickCooldownUntil=0;cx=cy=.5f;clearEvents();out.state="OFF";
     }
 
