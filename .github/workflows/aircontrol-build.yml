@@ -1,4 +1,4 @@
-name: AirControl V3 APK build
+name: AirControl APK build
 on:
   push:
     branches: [aircontrol-build-temp]
@@ -9,27 +9,26 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v5
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - name: Prepare V3 source and MediaPipe model
+      - name: Prepare AirControl V3
         run: |
-          rm -rf AirControlV3
-          unzip -q AirControlV3-source.zip
-          mkdir -p AirControlV3/app/src/main/assets
-          curl --fail --location --retry 3 \
-            https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task \
-            -o AirControlV3/app/src/main/assets/hand_landmarker.task
-          test -s AirControlV3/app/src/main/assets/hand_landmarker.task
+          rm -rf aircontrol AirControlV3
+          unzip -q aircontrol_v3.zip
+          mv AirControlV3 aircontrol
+          sed -i "s/com.google.mediapipe:tasks-vision:1.0.0/com.google.mediapipe:tasks-vision:latest.release/" aircontrol/app/build.gradle
+          mkdir -p aircontrol/app/src/main/assets
+          curl -fL https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task -o aircontrol/app/src/main/assets/hand_landmarker.task
       - name: Build debug APK
-        working-directory: AirControlV3
+        working-directory: aircontrol
         run: gradle --no-daemon assembleDebug
       - name: Collect APK
-        run: cp AirControlV3/app/build/outputs/apk/debug/app-debug.apk AirControlV3.apk
+        run: cp aircontrol/app/build/outputs/apk/debug/app-debug.apk AirControlV3.apk
       - uses: actions/upload-artifact@v4
         with:
           name: AirControlV3-apk
