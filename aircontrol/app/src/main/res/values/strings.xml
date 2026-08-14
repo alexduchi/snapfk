@@ -1,4 +1,4 @@
 <resources>
     <string name="app_name">AirControl</string>
-    <string name="accessibility_desc">Permet à AirControl d'envoyer les gestes reconnus par la caméra frontale.</string>
+    <string name="accessibility_desc">Permet à AirControl d\'envoyer les gestes reconnus par la caméra frontale.</string>
 </resources>
