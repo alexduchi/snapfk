@@ -17,12 +17,11 @@ public final class MainActivity extends Activity {
     private View buildUi(){
         ScrollView scroll=new ScrollView(this);LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setPadding(dp(24),dp(28),dp(24),dp(28));root.setBackgroundColor(0xFFF5F6F8);scroll.addView(root);
         TextView logo=new TextView(this);logo.setText("AC");logo.setTextSize(28);logo.setTextColor(Color.WHITE);logo.setGravity(Gravity.CENTER);logo.setBackgroundColor(0xFF111318);root.addView(logo,new LinearLayout.LayoutParams(dp(72),dp(72)));
-        TextView title=new TextView(this);title.setText("AirControl");title.setTextSize(30);title.setTextColor(0xFF111318);title.setPadding(0,dp(18),0,dp(6));root.addView(title);
-        TextView sub=new TextView(this);sub.setText("Contrôle mains libres · traitement local\n\n1. Autorise caméra + bulle flottante.\n2. Active AirControl dans Accessibilité.\n3. Pose le téléphone puis lance ON.\n4. Laisse le champ vide pendant la calibration, montre deux doigts ✌ puis fais un geste net.");sub.setTextSize(16);sub.setTextColor(0xFF40444B);root.addView(sub);
+        TextView title=new TextView(this);title.setText("AirControl V4");title.setTextSize(30);title.setTextColor(0xFF111318);title.setPadding(0,dp(18),0,dp(6));root.addView(title);
+        TextView sub=new TextView(this);sub.setText("Contrôle mains libres · traitement local\n\n1. Autorise caméra + bulle flottante.\n2. Active AirControl dans Accessibilité.\n3. Appuie ON.\n4. C'est tout : montre simplement ta main et fais un mouvement net gauche/droite/haut/bas.\n\nAucun V, aucune calibration, aucun armement.");sub.setTextSize(16);sub.setTextColor(0xFF40444B);root.addView(sub);
         Button overlay=new Button(this);overlay.setText("Autoriser la bulle flottante");overlay.setOnClickListener(v->openOverlay());root.addView(overlay,lp());
         Button accessibility=new Button(this);accessibility.setText("Ouvrir Accessibilité");accessibility.setOnClickListener(v->startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)));root.addView(accessibility,lp());
-        Button on=new Button(this);on.setText("ON · démarrer");on.setOnClickListener(v->startAir());root.addView(on,lp());
-        Button cal=new Button(this);cal.setText("Recalibrer");cal.setOnClickListener(v->{Intent i=new Intent(this,AirControlService.class);i.setAction(AirControlService.ACTION_CALIBRATE);startService(i);});root.addView(cal,lp());
+        Button on=new Button(this);on.setText("ON · démarrer automatiquement");on.setOnClickListener(v->startAir());root.addView(on,lp());
         Button off=new Button(this);off.setText("OFF · arrêter");off.setOnClickListener(v->{Intent i=new Intent(this,AirControlService.class);i.setAction(AirControlService.ACTION_STOP);startService(i);});root.addView(off,lp());
         state=new TextView(this);state.setPadding(0,dp(16),0,0);root.addView(state);refresh();return scroll;
     }
