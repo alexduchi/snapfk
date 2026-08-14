@@ -6,6 +6,7 @@ import android.graphics.*;
 import android.graphics.SurfaceTexture;
 import android.graphics.drawable.GradientDrawable;
 import android.hardware.Camera;
+import android.media.AudioManager;
 import android.os.*;
 import android.provider.Settings;
 import android.util.DisplayMetrics;
@@ -34,6 +35,8 @@ public final class AirControlService extends Service implements Camera.PreviewCa
     private MediaPipeHandTracker tracker;
     private final LandmarkGestureEngine engine=new LandmarkGestureEngine();
     private final RemotePointerEngine pointerEngine=new RemotePointerEngine();
+    private final VolumeGestureEngine volumeEngine=new VolumeGestureEngine();
+    private AudioManager audioManager;
     private Bitmap frameBitmap;
     private int[] rgb;
     private int outW,outH;
@@ -55,7 +58,8 @@ public final class AirControlService extends Service implements Camera.PreviewCa
         super.onCreate();
         float saved=getSharedPreferences(PREFS,MODE_PRIVATE).getFloat(PREF_POINTER_SENS,1.15f);
         pointerEngine.setSensitivity(saved);
-        createChannel();startForeground(42,notification("AirControl V7.2 · visible pointer + reliable click"));
+        audioManager=(AudioManager)getSystemService(AUDIO_SERVICE);
+        createChannel();startForeground(42,notification("AirControl V7.3 · mouse + click + volume"));
         tracker=new MediaPipeHandTracker(this,this);startCamera();
         if(Settings.canDrawOverlays(this)){showOverlay();createCursor();}
         fpsWindow=SystemClock.elapsedRealtime();
@@ -64,13 +68,13 @@ public final class AirControlService extends Service implements Camera.PreviewCa
     @Override public int onStartCommand(Intent i,int flags,int id){
         if(i!=null){
             if(ACTION_STOP.equals(i.getAction())){stopSelf();return START_NOT_STICKY;}
-            if(ACTION_RESET.equals(i.getAction())){engine.reset();pointerEngine.reset();hideCursor();setStatus("Tracking réinitialisé");}
+            if(ACTION_RESET.equals(i.getAction())){engine.reset();pointerEngine.reset();volumeEngine.reset();hideCursor();setStatus("Tracking réinitialisé");}
         }
         return START_STICKY;
     }
 
     private void createChannel(){if(Build.VERSION.SDK_INT>=26){NotificationChannel c=new NotificationChannel(CHANNEL,"AirControl camera",NotificationManager.IMPORTANCE_LOW);getSystemService(NotificationManager.class).createNotificationChannel(c);}}
-    private Notification notification(String text){Intent open=new Intent(this,MainActivity.class);PendingIntent pi=PendingIntent.getActivity(this,1,open,PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT);Notification.Builder b=Build.VERSION.SDK_INT>=26?new Notification.Builder(this,CHANNEL):new Notification.Builder(this);return b.setSmallIcon(android.R.drawable.ic_menu_camera).setContentTitle("AirControl V7.2").setContentText(text).setOngoing(true).setContentIntent(pi).build();}
+    private Notification notification(String text){Intent open=new Intent(this,MainActivity.class);PendingIntent pi=PendingIntent.getActivity(this,1,open,PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT);Notification.Builder b=Build.VERSION.SDK_INT>=26?new Notification.Builder(this,CHANNEL):new Notification.Builder(this);return b.setSmallIcon(android.R.drawable.ic_menu_camera).setContentTitle("AirControl V7.3").setContentText(text).setOngoing(true).setContentIntent(pi).build();}
 
     private int front(){Camera.CameraInfo info=new Camera.CameraInfo();for(int i=0;i<Camera.getNumberOfCameras();i++){Camera.getCameraInfo(i,info);if(info.facing==Camera.CameraInfo.CAMERA_FACING_FRONT)return i;}return -1;}
     private int displayDegrees(){int r=((WindowManager)getSystemService(WINDOW_SERVICE)).getDefaultDisplay().getRotation();switch(r){case Surface.ROTATION_90:return 90;case Surface.ROTATION_180:return 180;case Surface.ROTATION_270:return 270;default:return 0;}}
@@ -109,6 +113,12 @@ public final class AirControlService extends Service implements Camera.PreviewCa
 
     @Override public void onHands(float[][] xs,float[][] ys,float[][] zs,long timestampMs,long inference){
         inferenceMs=inference;tickFps();
+
+        VolumeGestureEngine.Result vr=volumeEngine.process(xs,ys,zs,timestampMs);
+        if(vr.active||vr.blockOther){
+            engine.reset();pointerEngine.reset();hideCursor();handleVolume(vr);updateVolumeDebug(vr,xs==null?0:xs.length);return;
+        }
+
         RemotePointerEngine.Result pr=pointerEngine.process(xs,ys,zs,timestampMs);
         if(pr.active||pr.blockSwipes){engine.reset();handlePointer(pr);updatePointerDebug(pr,xs==null?0:xs.length);return;}
         hideCursor();
@@ -121,21 +131,44 @@ public final class AirControlService extends Service implements Camera.PreviewCa
         }else updateDebug();
     }
 
+    private void handleVolume(VolumeGestureEngine.Result vr){
+        if(audioManager==null)return;
+        if(vr.volumeUp){audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC,AudioManager.ADJUST_RAISE,AudioManager.FLAG_SHOW_UI);bubbleState(10);}
+        else if(vr.volumeDown){audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC,AudioManager.ADJUST_LOWER,AudioManager.FLAG_SHOW_UI);bubbleState(11);}
+        else if(vr.active)bubbleState(9);
+    }
+
     private void handlePointer(RemotePointerEngine.Result pr){
         if(!pr.active){hideCursor();return;}
         showCursor(pr.x,pr.y,pr.pinching);
+        if(pr.tap){AirAccessibilityService.tapNormalized(pr.x,pr.y);bubbleState(7);}
         if(pr.dragStart){AirAccessibilityService.dragStartNormalized(pr.x,pr.y);bubbleState(8);}
-        else if(pr.dragMove){AirAccessibilityService.dragMoveNormalized(pr.x,pr.y);bubbleState(pr.dragging?8:7);}
+        else if(pr.dragMove){AirAccessibilityService.dragMoveNormalized(pr.x,pr.y);bubbleState(8);}
         if(pr.dragEnd){AirAccessibilityService.dragEndNormalized(pr.x,pr.y);bubbleState(7);}
     }
 
-    @Override public void onNoHand(long timestampMs,long inference){inferenceMs=inference;tickFps();RemotePointerEngine.Result pr=pointerEngine.onNoHands(timestampMs);if(pr.active||pr.blockSwipes){handlePointer(pr);updatePointerDebug(pr,0);return;}hideCursor();engine.onNoHand(timestampMs);updateDebug();}
+    @Override public void onNoHand(long timestampMs,long inference){
+        inferenceMs=inference;tickFps();
+        VolumeGestureEngine.Result vr=volumeEngine.onNoHands(timestampMs);
+        if(vr.active||vr.blockOther){pointerEngine.reset();hideCursor();updateVolumeDebug(vr,0);return;}
+        RemotePointerEngine.Result pr=pointerEngine.onNoHands(timestampMs);
+        if(pr.active||pr.blockSwipes){handlePointer(pr);updatePointerDebug(pr,0);return;}
+        hideCursor();engine.onNoHand(timestampMs);updateDebug();
+    }
     @Override public void onError(String message){mlError=message;setStatus("ML erreur\n"+message);bubbleState(3);}
     private void tickFps(){long now=SystemClock.uptimeMillis();resultFrames++;if(now-fpsWindow>=1000){mlFps=resultFrames*1000f/Math.max(1,now-fpsWindow);resultFrames=0;fpsWindow=now;}}
 
+    private void updateVolumeDebug(VolumeGestureEngine.Result vr,int hands){
+        long now=SystemClock.uptimeMillis();if(now-lastUi<100)return;
+        int vol=audioManager==null?-1:audioManager.getStreamVolume(AudioManager.STREAM_MUSIC);
+        int max=audioManager==null?-1:audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+        String text=String.format(Locale.US,"MODE VOLUME · %s\nMains %d · pose %s\nY %.3f · delta %.3f\nVolume %d / %d · zone morte + seuil",vr.state,hands,vr.poseFound?"oui":"non",vr.handY,vr.deltaY,vol,max);
+        setStatus(text);
+    }
+
     private void updatePointerDebug(RemotePointerEngine.Result pr,int hands){
         long now=SystemClock.uptimeMillis();if(now-lastUi<100)return;bubbleState(pr.dragging?8:(pr.active?6:1));
-        String text=String.format(Locale.US,"MODE SOURIS · %s\nMains %d · paire %s · pinch %.2f\nCurseur %.2f / %.2f · sens %.2fx\n%s · %s · ACC %s",pr.state,hands,pr.pairFound?"oui":"non",pr.pinchRatio,pr.x,pr.y,pointerEngine.getSensitivity(),cursorError,pr.dragging?"DRAG":(pr.pinching?"TOUCH":"MOVE"),AirAccessibilityService.lastGestureStatus());setStatus(text);
+        String text=String.format(Locale.US,"MODE SOURIS · %s\nMains %d · paire %s · pinch %.2f\nCurseur %.2f / %.2f · sens %.2fx\n%s · %s · ACC %s",pr.state,hands,pr.pairFound?"oui":"non",pr.pinchRatio,pr.x,pr.y,pointerEngine.getSensitivity(),cursorError,pr.dragging?"DRAG":(pr.pinching?"CLICK ARMÉ":"MOVE"),AirAccessibilityService.lastGestureStatus());setStatus(text);
     }
 
     private void updateDebug(){long now=SystemClock.uptimeMillis();if(now-lastUi<140)return;LandmarkGestureEngine.DebugState d=engine.debug();boolean acc=AirAccessibilityService.isReady();int s=!acc?4:(d.handFound?1:(d.grace?5:0));bubbleState(s);String ml=mlError!=null?"ERR":"OK";long lock=Math.max(0,SWIPE_ACTION_LOCK_MS-(now-lastSwipeActionMs));String text=String.format(Locale.US,"MediaPipe %s · %.1f fps · %d ms\nMAIN %s · tracking %s%s\n%s · v %.2f · d %.2f · coh %.0f%%\nlock %d ms · sens souris %.2fx\nACC %s · %s",ml,mlFps,inferenceMs,d.handFound?"oui":"non",d.tracking?"oui":"non",d.grace?" · mémoire":"",d.state,d.speed,d.displacement,d.coherence*100f,lock,pointerEngine.getSensitivity(),AirAccessibilityService.state(this),AirAccessibilityService.lastGestureStatus());setStatus(text);}
@@ -177,16 +210,13 @@ public final class AirControlService extends Service implements Camera.PreviewCa
         });
     }
 
-    private void hideCursor(){
-        ui.post(()->{if(cursorShown&&wm!=null&&cursor!=null){try{wm.removeView(cursor);}catch(Exception ignored){}cursorShown=false;cursorError="CURSOR_HIDDEN";}});
-    }
+    private void hideCursor(){ui.post(()->{if(cursorShown&&wm!=null&&cursor!=null){try{wm.removeView(cursor);}catch(Exception ignored){}cursorShown=false;cursorError="CURSOR_HIDDEN";}});}
 
     private void showOverlay(){
         wm=(WindowManager)getSystemService(WINDOW_SERVICE);WindowManager.LayoutParams p=new WindowManager.LayoutParams(WindowManager.LayoutParams.WRAP_CONTENT,WindowManager.LayoutParams.WRAP_CONTENT,WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE|WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,PixelFormat.TRANSLUCENT);p.gravity=Gravity.TOP|Gravity.END;p.x=6;p.y=180;
         panel=new LinearLayout(this);panel.setOrientation(LinearLayout.VERTICAL);panel.setPadding(dp(8),dp(8),dp(8),dp(8));panel.setBackgroundColor(0xE6111318);
         bubble=new TextView(this);bubble.setText("AC\nAUTO");bubble.setTextColor(Color.WHITE);bubble.setTextSize(11);bubble.setGravity(Gravity.CENTER);bubble.setBackgroundColor(0xFF343840);panel.addView(bubble,new LinearLayout.LayoutParams(dp(56),dp(56)));
-        status=new TextView(this);status.setText("Fast tracking + souris distante...");status.setTextColor(Color.WHITE);status.setTextSize(12);status.setPadding(0,dp(7),0,dp(5));status.setVisibility(View.GONE);panel.addView(status,new LinearLayout.LayoutParams(dp(300),-2));
-
+        status=new TextView(this);status.setText("Fast tracking + souris + volume...");status.setTextColor(Color.WHITE);status.setTextSize(12);status.setPadding(0,dp(7),0,dp(5));status.setVisibility(View.GONE);panel.addView(status,new LinearLayout.LayoutParams(dp(300),-2));
         sensitivityLabel=new TextView(this);sensitivityLabel.setTextColor(Color.WHITE);sensitivityLabel.setTextSize(12);sensitivityLabel.setPadding(0,dp(4),0,0);sensitivityLabel.setVisibility(View.GONE);panel.addView(sensitivityLabel,new LinearLayout.LayoutParams(dp(300),dp(30)));
         sensitivityBar=new SeekBar(this);sensitivityBar.setMax(120);sensitivityBar.setProgress(Math.round((pointerEngine.getSensitivity()-.60f)*100f));sensitivityBar.setVisibility(View.GONE);panel.addView(sensitivityBar,new LinearLayout.LayoutParams(dp(300),dp(44)));updateSensitivityLabel();
         sensitivityBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
@@ -194,7 +224,6 @@ public final class AirControlService extends Service implements Camera.PreviewCa
             @Override public void onStartTrackingTouch(SeekBar b){}
             @Override public void onStopTrackingTouch(SeekBar b){}
         });
-
         Button resetSens=new Button(this);resetSens.setText("Sensibilité souris par défaut");resetSens.setVisibility(View.GONE);panel.addView(resetSens,new LinearLayout.LayoutParams(dp(300),dp(46)));
         Button reset=new Button(this);reset.setText("Réinitialiser tracking");reset.setVisibility(View.GONE);panel.addView(reset,new LinearLayout.LayoutParams(dp(300),dp(46)));
         Button test=new Button(this);test.setText("Test swipe bas");test.setVisibility(View.GONE);panel.addView(test,new LinearLayout.LayoutParams(dp(300),dp(46)));
@@ -202,14 +231,14 @@ public final class AirControlService extends Service implements Camera.PreviewCa
         Button off=new Button(this);off.setText("OFF");off.setVisibility(View.GONE);panel.addView(off,new LinearLayout.LayoutParams(dp(300),dp(46)));
         bubble.setOnClickListener(v->{boolean open=status.getVisibility()!=View.VISIBLE;int vis=open?View.VISIBLE:View.GONE;status.setVisibility(vis);sensitivityLabel.setVisibility(vis);sensitivityBar.setVisibility(vis);resetSens.setVisibility(vis);reset.setVisibility(vis);test.setVisibility(vis);access.setVisibility(vis);off.setVisibility(vis);});
         resetSens.setOnClickListener(v->{pointerEngine.setSensitivity(1.15f);sensitivityBar.setProgress(55);getSharedPreferences(PREFS,MODE_PRIVATE).edit().putFloat(PREF_POINTER_SENS,1.15f).apply();updateSensitivityLabel();setStatus("Sensibilité souris remise à 1.15x");});
-        reset.setOnClickListener(v->{engine.reset();pointerEngine.reset();hideCursor();setStatus("Tracking réinitialisé");});
+        reset.setOnClickListener(v->{engine.reset();pointerEngine.reset();volumeEngine.reset();hideCursor();setStatus("Tracking réinitialisé");});
         test.setOnClickListener(v->{long now=SystemClock.uptimeMillis();if(now-lastSwipeActionMs<SWIPE_ACTION_LOCK_MS){setStatus("Test bloqué par délai sécurité");return;}lastSwipeActionMs=now;boolean ok=AirAccessibilityService.perform(GestureCommand.DOWN);setStatus((ok?"Test DOWN demandé":"ACCESSIBILITÉ OFF")+"\n"+AirAccessibilityService.lastGestureStatus());bubbleState(ok?2:4);});
         access.setOnClickListener(v->{Intent i=new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);startActivity(i);});
         off.setOnClickListener(v->stopSelf());wm.addView(panel,p);
     }
 
     private void updateSensitivityLabel(){if(sensitivityLabel!=null)sensitivityLabel.setText(String.format(Locale.US,"Sensibilité souris : %.2fx",pointerEngine.getSensitivity()));}
-    private void bubbleState(int s){if(bubble==null)return;final int bg;final String t;switch(s){case 1:bg=0xFF246B3B;t="AC\nTRACK";break;case 2:bg=0xFF176B77;t="AC\nSWIPE";break;case 3:bg=0xFF7A2525;t="AC\nML ERR";break;case 4:bg=0xFF8B1E1E;t="AC\nACC OFF";break;case 5:bg=0xFF675C20;t="AC\nHOLD";break;case 6:bg=0xFF384E8A;t="AC\nMOUSE";break;case 7:bg=0xFF5A3F8B;t="AC\nTOUCH";break;case 8:bg=0xFF7A3C88;t="AC\nDRAG";break;default:bg=0xFF343840;t="AC\nAUTO";}bubble.post(()->{bubble.setText(t);bubble.setBackgroundColor(bg);});}
+    private void bubbleState(int s){if(bubble==null)return;final int bg;final String t;switch(s){case 1:bg=0xFF246B3B;t="AC\nTRACK";break;case 2:bg=0xFF176B77;t="AC\nSWIPE";break;case 3:bg=0xFF7A2525;t="AC\nML ERR";break;case 4:bg=0xFF8B1E1E;t="AC\nACC OFF";break;case 5:bg=0xFF675C20;t="AC\nHOLD";break;case 6:bg=0xFF384E8A;t="AC\nMOUSE";break;case 7:bg=0xFF5A3F8B;t="AC\nCLICK";break;case 8:bg=0xFF7A3C88;t="AC\nDRAG";break;case 9:bg=0xFF355C6B;t="AC\nVOLUME";break;case 10:bg=0xFF2F6B42;t="AC\nVOL +";break;case 11:bg=0xFF6B4A2F;t="AC\nVOL -";break;default:bg=0xFF343840;t="AC\nAUTO";}bubble.post(()->{bubble.setText(t);bubble.setBackgroundColor(bg);});}
     private void setStatus(String s){lastUi=SystemClock.uptimeMillis();if(status!=null)status.post(()->status.setText(s));}
     private int dp(int n){return(int)(n*getResources().getDisplayMetrics().density+.5f);}
 
