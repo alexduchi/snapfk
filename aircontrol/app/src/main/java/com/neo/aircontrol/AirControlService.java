@@ -20,7 +20,7 @@ public final class AirControlService extends Service implements Camera.PreviewCa
     public static final String ACTION_RESET="com.neo.aircontrol.RESET";
     public static final String ACTION_CALIBRATE=ACTION_RESET;
     private static final String CHANNEL="aircontrol_camera";
-    private static final long FRAME_INTERVAL_MS=80;
+    private static final long FRAME_INTERVAL_MS=48;
 
     private Camera camera;
     private int fw,fh,cameraId=-1,rotation;
@@ -41,7 +41,7 @@ public final class AirControlService extends Service implements Camera.PreviewCa
 
     @Override public void onCreate(){
         super.onCreate();createChannel();
-        startForeground(42,notification("AirControl V5 · suivi automatique renforcé"));
+        startForeground(42,notification("AirControl V6.2 · fast tracking"));
         tracker=new MediaPipeHandTracker(this,this);startCamera();
         if(Settings.canDrawOverlays(this))showOverlay();
         fpsWindow=SystemClock.elapsedRealtime();
@@ -56,7 +56,7 @@ public final class AirControlService extends Service implements Camera.PreviewCa
     }
 
     private void createChannel(){if(Build.VERSION.SDK_INT>=26){NotificationChannel c=new NotificationChannel(CHANNEL,"AirControl camera",NotificationManager.IMPORTANCE_LOW);getSystemService(NotificationManager.class).createNotificationChannel(c);}}
-    private Notification notification(String text){Intent open=new Intent(this,MainActivity.class);PendingIntent pi=PendingIntent.getActivity(this,1,open,PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT);Notification.Builder b=Build.VERSION.SDK_INT>=26?new Notification.Builder(this,CHANNEL):new Notification.Builder(this);return b.setSmallIcon(android.R.drawable.ic_menu_camera).setContentTitle("AirControl V5").setContentText(text).setOngoing(true).setContentIntent(pi).build();}
+    private Notification notification(String text){Intent open=new Intent(this,MainActivity.class);PendingIntent pi=PendingIntent.getActivity(this,1,open,PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT);Notification.Builder b=Build.VERSION.SDK_INT>=26?new Notification.Builder(this,CHANNEL):new Notification.Builder(this);return b.setSmallIcon(android.R.drawable.ic_menu_camera).setContentTitle("AirControl V6.2").setContentText(text).setOngoing(true).setContentIntent(pi).build();}
 
     private int front(){Camera.CameraInfo info=new Camera.CameraInfo();for(int i=0;i<Camera.getNumberOfCameras();i++){Camera.getCameraInfo(i,info);if(info.facing==Camera.CameraInfo.CAMERA_FACING_FRONT)return i;}return -1;}
     private int displayDegrees(){int r=((WindowManager)getSystemService(WINDOW_SERVICE)).getDefaultDisplay().getRotation();switch(r){case Surface.ROTATION_90:return 90;case Surface.ROTATION_180:return 180;case Surface.ROTATION_270:return 270;default:return 0;}}
@@ -68,19 +68,28 @@ public final class AirControlService extends Service implements Camera.PreviewCa
             camera=Camera.open(cameraId);Camera.Parameters p=camera.getParameters();Camera.Size chosen=chooseSize(p.getSupportedPreviewSizes());if(chosen!=null)p.setPreviewSize(chosen.width,chosen.height);p.setPreviewFormat(android.graphics.ImageFormat.NV21);
             List<String> focus=p.getSupportedFocusModes();if(focus!=null&&focus.contains(Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO))p.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO);camera.setParameters(p);
             Camera.Size a=camera.getParameters().getPreviewSize();fw=a.width;fh=a.height;rotation=analysisRotationForFront(cameraId);
-            if(rotation==90||rotation==270){outW=360;outH=480;}else{outW=480;outH=360;}
+            if(rotation==90||rotation==270){outW=270;outH=360;}else{outW=360;outH=270;}
             rgb=new int[outW*outH];frameBitmap=Bitmap.createBitmap(outW,outH,Bitmap.Config.ARGB_8888);
-            texture=new SurfaceTexture(0);camera.setPreviewTexture(texture);camera.setPreviewCallback(this);camera.startPreview();
+            texture=new SurfaceTexture(0);camera.setPreviewTexture(texture);camera.setPreviewCallbackWithBuffer(this);
+            int bufferSize=fw*fh*android.graphics.ImageFormat.getBitsPerPixel(android.graphics.ImageFormat.NV21)/8;
+            camera.addCallbackBuffer(new byte[bufferSize]);camera.addCallbackBuffer(new byte[bufferSize]);camera.addCallbackBuffer(new byte[bufferSize]);
+            camera.startPreview();
         }catch(RuntimeException|IOException e){mlError="caméra: "+e.getClass().getSimpleName();stopSelf();}
     }
 
     private Camera.Size chooseSize(List<Camera.Size> sizes){
         if(sizes==null||sizes.isEmpty())return null;Camera.Size best=null;long bestScore=Long.MAX_VALUE;
-        for(Camera.Size s:sizes){long area=(long)s.width*s.height;long score=Math.abs(s.width-960L)*2+Math.abs(s.height-720L)*2+Math.abs(area-691200L)/300;if(score<bestScore){bestScore=score;best=s;}}
+        for(Camera.Size s:sizes){long area=(long)s.width*s.height;long score=Math.abs(s.width-640L)*3+Math.abs(s.height-480L)*3+Math.abs(area-307200L)/200;if(score<bestScore){bestScore=score;best=s;}}
         return best;
     }
 
-    @Override public void onPreviewFrame(byte[] data,Camera c){if(data==null||fw<=0||tracker==null||!tracker.ready()||tracker.busy())return;long now=SystemClock.uptimeMillis();if(now-lastFrameSubmit<FRAME_INTERVAL_MS)return;lastFrameSubmit=now;nv21ToUprightRgb(data,fw,fh);frameBitmap.setPixels(rgb,0,outW,0,0,outW,outH);tracker.submit(frameBitmap);}
+    @Override public void onPreviewFrame(byte[] data,Camera c){
+        try{
+            if(data==null||fw<=0||tracker==null||!tracker.ready()||tracker.busy())return;
+            long now=SystemClock.uptimeMillis();if(now-lastFrameSubmit<FRAME_INTERVAL_MS)return;lastFrameSubmit=now;
+            nv21ToUprightRgb(data,fw,fh);frameBitmap.setPixels(rgb,0,outW,0,0,outW,outH);tracker.submit(frameBitmap);
+        }finally{if(c!=null&&data!=null)try{c.addCallbackBuffer(data);}catch(Exception ignored){}}
+    }
 
     private void nv21ToUprightRgb(byte[] a,int w,int h){
         final int frameSize=w*h;
@@ -89,27 +98,17 @@ public final class AirControlService extends Service implements Camera.PreviewCa
     }
     private static int clamp(int x,int lo,int hi){return x<lo?lo:x>hi?hi:x;}
 
-    @Override public void onLandmarks(float[] x,float[] y,float[] z,long timestampMs,long inference){
-        inferenceMs=inference;tickFps();GestureCommand cmd=engine.process(x,y,z,timestampMs);
-        if(cmd!=GestureCommand.NONE){boolean ok=AirAccessibilityService.perform(cmd);bubbleState(ok?2:4);setStatus((ok?"SWIPE ":"ACCESSIBILITÉ OFF · ")+cmd.name()+"\n"+AirAccessibilityService.lastGestureStatus());}
-        else updateDebug();
-    }
+    @Override public void onLandmarks(float[] x,float[] y,float[] z,long timestampMs,long inference){inferenceMs=inference;tickFps();GestureCommand cmd=engine.process(x,y,z,timestampMs);if(cmd!=GestureCommand.NONE){boolean ok=AirAccessibilityService.perform(cmd);bubbleState(ok?2:4);setStatus((ok?"SWIPE ":"ACCESSIBILITÉ OFF · ")+cmd.name()+"\n"+AirAccessibilityService.lastGestureStatus());}else updateDebug();}
     @Override public void onNoHand(long timestampMs,long inference){inferenceMs=inference;tickFps();engine.onNoHand(timestampMs);updateDebug();}
     @Override public void onError(String message){mlError=message;setStatus("ML erreur\n"+message);bubbleState(3);}
-
     private void tickFps(){long now=SystemClock.uptimeMillis();resultFrames++;if(now-fpsWindow>=1000){mlFps=resultFrames*1000f/Math.max(1,now-fpsWindow);resultFrames=0;fpsWindow=now;}}
-
-    private void updateDebug(){
-        long now=SystemClock.uptimeMillis();if(now-lastUi<160)return;LandmarkGestureEngine.DebugState d=engine.debug();boolean acc=AirAccessibilityService.isReady();int s=!acc?4:(d.handFound?1:0);bubbleState(s);String ml=mlError!=null?"ERR":"OK";
-        String text=String.format(Locale.US,"MediaPipe %s · %.1f fps · %d ms\nMAIN %s · tracking %s%s\n%s · v %.2f · d %.2f · coh %.0f%%\nACC %s · %s",ml,mlFps,inferenceMs,d.handFound?"oui":"non",d.tracking?"oui":"non",d.grace?" · reprise":"",d.state,d.speed,d.displacement,d.coherence*100f,AirAccessibilityService.state(this),AirAccessibilityService.lastGestureStatus());
-        setStatus(text);
-    }
+    private void updateDebug(){long now=SystemClock.uptimeMillis();if(now-lastUi<140)return;LandmarkGestureEngine.DebugState d=engine.debug();boolean acc=AirAccessibilityService.isReady();int s=!acc?4:(d.handFound?1:(d.grace?5:0));bubbleState(s);String ml=mlError!=null?"ERR":"OK";String text=String.format(Locale.US,"MediaPipe %s · %.1f fps · %d ms\nMAIN %s · tracking %s%s\n%s · v %.2f · d %.2f · coh %.0f%%\nACC %s · %s",ml,mlFps,inferenceMs,d.handFound?"oui":"non",d.tracking?"oui":"non",d.grace?" · mémoire":"",d.state,d.speed,d.displacement,d.coherence*100f,AirAccessibilityService.state(this),AirAccessibilityService.lastGestureStatus());setStatus(text);}
 
     private void showOverlay(){
         wm=(WindowManager)getSystemService(WINDOW_SERVICE);WindowManager.LayoutParams p=new WindowManager.LayoutParams(WindowManager.LayoutParams.WRAP_CONTENT,WindowManager.LayoutParams.WRAP_CONTENT,WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE|WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,PixelFormat.TRANSLUCENT);p.gravity=Gravity.TOP|Gravity.END;p.x=6;p.y=180;
         panel=new LinearLayout(this);panel.setOrientation(LinearLayout.VERTICAL);panel.setPadding(dp(8),dp(8),dp(8),dp(8));panel.setBackgroundColor(0xE6111318);
         bubble=new TextView(this);bubble.setText("AC\nAUTO");bubble.setTextColor(Color.WHITE);bubble.setTextSize(11);bubble.setGravity(Gravity.CENTER);bubble.setBackgroundColor(0xFF343840);panel.addView(bubble,new LinearLayout.LayoutParams(dp(56),dp(56)));
-        status=new TextView(this);status.setText("Suivi automatique...");status.setTextColor(Color.WHITE);status.setTextSize(12);status.setPadding(0,dp(7),0,dp(5));status.setVisibility(View.GONE);panel.addView(status,new LinearLayout.LayoutParams(dp(300),-2));
+        status=new TextView(this);status.setText("Fast tracking...");status.setTextColor(Color.WHITE);status.setTextSize(12);status.setPadding(0,dp(7),0,dp(5));status.setVisibility(View.GONE);panel.addView(status,new LinearLayout.LayoutParams(dp(300),-2));
         Button reset=new Button(this);reset.setText("Réinitialiser tracking");reset.setVisibility(View.GONE);panel.addView(reset,new LinearLayout.LayoutParams(dp(300),dp(46)));
         Button test=new Button(this);test.setText("Test swipe bas");test.setVisibility(View.GONE);panel.addView(test,new LinearLayout.LayoutParams(dp(300),dp(46)));
         Button access=new Button(this);access.setText("Ouvrir Accessibilité");access.setVisibility(View.GONE);panel.addView(access,new LinearLayout.LayoutParams(dp(300),dp(46)));
@@ -121,10 +120,9 @@ public final class AirControlService extends Service implements Camera.PreviewCa
         off.setOnClickListener(v->stopSelf());wm.addView(panel,p);
     }
 
-    private void bubbleState(int s){if(bubble==null)return;final int bg;final String t;switch(s){case 1:bg=0xFF246B3B;t="AC\nTRACK";break;case 2:bg=0xFF176B77;t="AC\nSWIPE";break;case 3:bg=0xFF7A2525;t="AC\nML ERR";break;case 4:bg=0xFF8B1E1E;t="AC\nACC OFF";break;default:bg=0xFF343840;t="AC\nAUTO";}bubble.post(()->{bubble.setText(t);bubble.setBackgroundColor(bg);});}
+    private void bubbleState(int s){if(bubble==null)return;final int bg;final String t;switch(s){case 1:bg=0xFF246B3B;t="AC\nTRACK";break;case 2:bg=0xFF176B77;t="AC\nSWIPE";break;case 3:bg=0xFF7A2525;t="AC\nML ERR";break;case 4:bg=0xFF8B1E1E;t="AC\nACC OFF";break;case 5:bg=0xFF675C20;t="AC\nHOLD";break;default:bg=0xFF343840;t="AC\nAUTO";}bubble.post(()->{bubble.setText(t);bubble.setBackgroundColor(bg);});}
     private void setStatus(String s){lastUi=SystemClock.uptimeMillis();if(status!=null)status.post(()->status.setText(s));}
     private int dp(int n){return(int)(n*getResources().getDisplayMetrics().density+.5f);}
-
-    @Override public void onDestroy(){if(camera!=null){try{camera.setPreviewCallback(null);camera.stopPreview();camera.release();}catch(Exception ignored){}camera=null;}if(texture!=null)try{texture.release();}catch(Exception ignored){}if(tracker!=null)try{tracker.close();}catch(Exception ignored){}if(wm!=null&&panel!=null)try{wm.removeView(panel);}catch(Exception ignored){}if(frameBitmap!=null&&!frameBitmap.isRecycled())frameBitmap.recycle();stopForeground(true);super.onDestroy();}
+    @Override public void onDestroy(){if(camera!=null){try{camera.setPreviewCallbackWithBuffer(null);camera.stopPreview();camera.release();}catch(Exception ignored){}camera=null;}if(texture!=null)try{texture.release();}catch(Exception ignored){}if(tracker!=null)try{tracker.close();}catch(Exception ignored){}if(wm!=null&&panel!=null)try{wm.removeView(panel);}catch(Exception ignored){}if(frameBitmap!=null&&!frameBitmap.isRecycled())frameBitmap.recycle();stopForeground(true);super.onDestroy();}
     @Override public IBinder onBind(Intent i){return null;}
 }
