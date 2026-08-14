@@ -37,9 +37,9 @@ public final class MediaPipeHandTracker implements AutoCloseable {
                     .setBaseOptions(base)
                     .setRunningMode(RunningMode.LIVE_STREAM)
                     .setNumHands(1)
-                    .setMinHandDetectionConfidence(0.20f)
-                    .setMinHandPresenceConfidence(0.18f)
-                    .setMinTrackingConfidence(0.20f)
+                    .setMinHandDetectionConfidence(0.32f)
+                    .setMinHandPresenceConfidence(0.26f)
+                    .setMinTrackingConfidence(0.30f)
                     .setResultListener((result,input)->handleResult(result))
                     .setErrorListener(error->{busy.set(false);listener.onError(error.getMessage()==null?"MediaPipe error":error.getMessage());})
                     .build();
