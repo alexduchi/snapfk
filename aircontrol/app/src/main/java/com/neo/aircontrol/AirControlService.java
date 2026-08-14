@@ -20,7 +20,7 @@ public final class AirControlService extends Service implements Camera.PreviewCa
     public static final String ACTION_RESET="com.neo.aircontrol.RESET";
     public static final String ACTION_CALIBRATE=ACTION_RESET;
     private static final String CHANNEL="aircontrol_camera";
-    private static final long FRAME_INTERVAL_MS=70;
+    private static final long FRAME_INTERVAL_MS=65;
 
     private Camera camera;
     private int fw,fh,cameraId=-1,rotation;
@@ -44,7 +44,7 @@ public final class AirControlService extends Service implements Camera.PreviewCa
     @Override public void onCreate(){
         super.onCreate();
         createChannel();
-        startForeground(42,notification("AirControl V3 · suivi de main ML local"));
+        startForeground(42,notification("AirControl V4 · suivi automatique"));
         tracker=new MediaPipeHandTracker(this,this);
         startCamera();
         if(Settings.canDrawOverlays(this))showOverlay();
@@ -54,7 +54,7 @@ public final class AirControlService extends Service implements Camera.PreviewCa
     @Override public int onStartCommand(Intent i,int flags,int id){
         if(i!=null){
             if(ACTION_STOP.equals(i.getAction())){stopSelf();return START_NOT_STICKY;}
-            if(ACTION_RESET.equals(i.getAction())){engine.reset();setStatus("Geste réinitialisé · montre ✌");}
+            if(ACTION_RESET.equals(i.getAction())){engine.reset();setStatus("Tracking réinitialisé");}
         }
         return START_STICKY;
     }
@@ -70,7 +70,7 @@ public final class AirControlService extends Service implements Camera.PreviewCa
         Intent open=new Intent(this,MainActivity.class);
         PendingIntent pi=PendingIntent.getActivity(this,1,open,PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT);
         Notification.Builder b=Build.VERSION.SDK_INT>=26?new Notification.Builder(this,CHANNEL):new Notification.Builder(this);
-        return b.setSmallIcon(android.R.drawable.ic_menu_camera).setContentTitle("AirControl V3").setContentText(text).setOngoing(true).setContentIntent(pi).build();
+        return b.setSmallIcon(android.R.drawable.ic_menu_camera).setContentTitle("AirControl V4").setContentText(text).setOngoing(true).setContentIntent(pi).build();
     }
 
     private int front(){
@@ -140,24 +140,15 @@ public final class AirControlService extends Service implements Camera.PreviewCa
         for(int oy=0;oy<outH;oy++){
             float v=(oy+.5f)/outH;
             for(int ox=0;ox<outW;ox++){
-                float u=(ox+.5f)/outW;
-                u=1f-u;
+                float u=(ox+.5f)/outW;u=1f-u;
                 float rx,ry;
-                switch(rotation){
-                    case 90: rx=v; ry=1f-u; break;
-                    case 180: rx=1f-u; ry=1f-v; break;
-                    case 270: rx=1f-v; ry=u; break;
-                    default: rx=u; ry=v;
-                }
-                int sx=clamp((int)(rx*w),0,w-1), sy=clamp((int)(ry*h),0,h-1);
+                switch(rotation){case 90:rx=v;ry=1f-u;break;case 180:rx=1f-u;ry=1f-v;break;case 270:rx=1f-v;ry=u;break;default:rx=u;ry=v;}
+                int sx=clamp((int)(rx*w),0,w-1),sy=clamp((int)(ry*h),0,h-1);
                 int yv=a[sy*w+sx]&255;
                 int uv=frameSize+(sy>>1)*w+(sx&~1);
-                int vv=(uv<a.length?a[uv]&255:128)-128;
-                int uu=(uv+1<a.length?a[uv+1]&255:128)-128;
+                int vv=(uv<a.length?a[uv]&255:128)-128,uu=(uv+1<a.length?a[uv+1]&255:128)-128;
                 int cc=Math.max(0,yv-16);
-                int r=clamp((298*cc+409*vv+128)>>8,0,255);
-                int g=clamp((298*cc-100*uu-208*vv+128)>>8,0,255);
-                int b=clamp((298*cc+516*uu+128)>>8,0,255);
+                int r=clamp((298*cc+409*vv+128)>>8,0,255),g=clamp((298*cc-100*uu-208*vv+128)>>8,0,255),b=clamp((298*cc+516*uu+128)>>8,0,255);
                 rgb[oy*outW+ox]=0xFF000000|(r<<16)|(g<<8)|b;
             }
         }
@@ -169,7 +160,8 @@ public final class AirControlService extends Service implements Camera.PreviewCa
         GestureCommand cmd=engine.process(x,y,z,timestampMs);
         if(cmd!=GestureCommand.NONE){
             boolean ok=AirAccessibilityService.perform(cmd);
-            setStatus((ok?"SWIPE ":"ACCESSIBILITÉ OFF · ")+cmd.name()+"\nrelâche le V pour réarmer");
+            bubbleState(2);
+            setStatus((ok?"SWIPE ":"ACCESSIBILITÉ OFF · ")+cmd.name());
         }else updateDebug();
     }
 
@@ -177,7 +169,7 @@ public final class AirControlService extends Service implements Camera.PreviewCa
         inferenceMs=inference;tickFps();engine.onNoHand(timestampMs);updateDebug();
     }
 
-    @Override public void onError(String message){mlError=message;setStatus("ML erreur\n"+message);bubbleState(4);}
+    @Override public void onError(String message){mlError=message;setStatus("ML erreur\n"+message);bubbleState(3);}
 
     private void tickFps(){
         long now=SystemClock.uptimeMillis();resultFrames++;
@@ -187,11 +179,11 @@ public final class AirControlService extends Service implements Camera.PreviewCa
     private void updateDebug(){
         long now=SystemClock.uptimeMillis();if(now-lastUi<160)return;
         LandmarkGestureEngine.DebugState d=engine.debug();
-        int s=d.armed?3:(d.vPose?2:(d.handFound?1:0));bubbleState(s);
+        int s=d.handFound?1:0;bubbleState(s);
         String ml=mlError!=null?"ERR":"OK";
         String text=String.format(Locale.US,
-                "MediaPipe %s · %.1f fps · %d ms\nMAIN %s · V %s · ARMÉ %s\n%s",
-                ml,mlFps,inferenceMs,d.handFound?"oui":"non",d.vPose?"oui":"non",d.armed?"OUI":"non",d.state);
+                "MediaPipe %s · %.1f fps · %d ms\nMAIN %s · tracking %s%s\n%s · v %.2f · d %.2f · coh %.0f%%",
+                ml,mlFps,inferenceMs,d.handFound?"oui":"non",d.tracking?"oui":"non",d.grace?" · reprise":"",d.state,d.speed,d.displacement,d.coherence*100f);
         setStatus(text);
     }
 
@@ -201,20 +193,20 @@ public final class AirControlService extends Service implements Camera.PreviewCa
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE|WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,PixelFormat.TRANSLUCENT);
         p.gravity=Gravity.TOP|Gravity.END;p.x=6;p.y=180;
         panel=new LinearLayout(this);panel.setOrientation(LinearLayout.VERTICAL);panel.setPadding(dp(8),dp(8),dp(8),dp(8));panel.setBackgroundColor(0xE6111318);
-        bubble=new TextView(this);bubble.setText("AC\nML");bubble.setTextColor(Color.WHITE);bubble.setTextSize(13);bubble.setGravity(Gravity.CENTER);bubble.setBackgroundColor(0xFF343840);panel.addView(bubble,new LinearLayout.LayoutParams(dp(52),dp(52)));
-        status=new TextView(this);status.setText("MediaPipe démarre...");status.setTextColor(Color.WHITE);status.setTextSize(12);status.setPadding(0,dp(7),0,dp(5));status.setVisibility(View.GONE);panel.addView(status,new LinearLayout.LayoutParams(dp(260),-2));
-        Button reset=new Button(this);reset.setText("Réinitialiser le geste");reset.setVisibility(View.GONE);panel.addView(reset,new LinearLayout.LayoutParams(dp(260),dp(46)));
-        Button test=new Button(this);test.setText("Test swipe bas");test.setVisibility(View.GONE);panel.addView(test,new LinearLayout.LayoutParams(dp(260),dp(46)));
-        Button off=new Button(this);off.setText("OFF");off.setVisibility(View.GONE);panel.addView(off,new LinearLayout.LayoutParams(dp(260),dp(46)));
+        bubble=new TextView(this);bubble.setText("AC\nAUTO");bubble.setTextColor(Color.WHITE);bubble.setTextSize(11);bubble.setGravity(Gravity.CENTER);bubble.setBackgroundColor(0xFF343840);panel.addView(bubble,new LinearLayout.LayoutParams(dp(52),dp(52)));
+        status=new TextView(this);status.setText("Suivi automatique...");status.setTextColor(Color.WHITE);status.setTextSize(12);status.setPadding(0,dp(7),0,dp(5));status.setVisibility(View.GONE);panel.addView(status,new LinearLayout.LayoutParams(dp(280),-2));
+        Button reset=new Button(this);reset.setText("Réinitialiser le tracking");reset.setVisibility(View.GONE);panel.addView(reset,new LinearLayout.LayoutParams(dp(280),dp(46)));
+        Button test=new Button(this);test.setText("Test swipe bas");test.setVisibility(View.GONE);panel.addView(test,new LinearLayout.LayoutParams(dp(280),dp(46)));
+        Button off=new Button(this);off.setText("OFF");off.setVisibility(View.GONE);panel.addView(off,new LinearLayout.LayoutParams(dp(280),dp(46)));
         bubble.setOnClickListener(v->{boolean open=status.getVisibility()!=View.VISIBLE;int vis=open?View.VISIBLE:View.GONE;status.setVisibility(vis);reset.setVisibility(vis);test.setVisibility(vis);off.setVisibility(vis);});
-        reset.setOnClickListener(v->{engine.reset();setStatus("Réinitialisé · montre ✌");});
+        reset.setOnClickListener(v->{engine.reset();setStatus("Tracking réinitialisé");});
         test.setOnClickListener(v->{boolean ok=AirAccessibilityService.perform(GestureCommand.DOWN);setStatus(ok?"Test DOWN envoyé":"Accessibilité inactive");});
         off.setOnClickListener(v->stopSelf());wm.addView(panel,p);
     }
 
     private void bubbleState(int s){
         if(bubble==null)return;final int bg;final String t;
-        switch(s){case 1:bg=0xFF725B20;t="AC\nH";break;case 2:bg=0xFF176B77;t="AC\nV";break;case 3:bg=0xFF246B3B;t="AC\nGO";break;case 4:bg=0xFF7A2525;t="AC\nERR";break;default:bg=0xFF343840;t="AC\nML";}
+        switch(s){case 1:bg=0xFF246B3B;t="AC\nTRACK";break;case 2:bg=0xFF176B77;t="AC\nSWIPE";break;case 3:bg=0xFF7A2525;t="AC\nERR";break;default:bg=0xFF343840;t="AC\nAUTO";}
         bubble.post(()->{bubble.setText(t);bubble.setBackgroundColor(bg);});
     }
 
