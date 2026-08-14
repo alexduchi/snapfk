@@ -13,7 +13,7 @@ public final class LandmarkGestureEngine {
 
     private static final int WRIST=0, INDEX_MCP=5, MIDDLE_MCP=9, RING_MCP=13, PINKY_MCP=17;
     private static final long SOFT_LOST_MS=320, HARD_LOST_MS=1000, BRIDGE_MAX_GAP_MS=560;
-    private static final long COOLDOWN_MS=800, ACQUIRE_MS=90, HISTORY_MS=430;
+    private static final long COOLDOWN_MS=1000, ACQUIRE_MS=90, HISTORY_MS=430;
     private static final float MIN_DISP=.058f, MIN_SPEED=.23f, DOMINANCE=1.18f;
     private static final float FAST_MIN=.085f, FAST_MAX=.55f, FAST_DOMINANCE=1.16f;
 
