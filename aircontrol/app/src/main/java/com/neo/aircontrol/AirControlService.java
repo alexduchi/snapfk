@@ -27,6 +27,7 @@ public final class AirControlService extends Service implements Camera.PreviewCa
     private static final String PREFS="aircontrol_settings";
     private static final String PREF_POINTER_SENS="pointer_sensitivity";
 
+    private final Handler ui=new Handler(Looper.getMainLooper());
     private Camera camera;
     private int fw,fh,cameraId=-1,rotation;
     private SurfaceTexture texture;
@@ -41,11 +42,12 @@ public final class AirControlService extends Service implements Camera.PreviewCa
     private float mlFps;
     private volatile long inferenceMs;
     private volatile String mlError;
+    private volatile String cursorError="CURSOR_READY";
     private WindowManager wm;
     private LinearLayout panel;
     private TextView bubble,status,sensitivityLabel;
     private SeekBar sensitivityBar;
-    private View cursor,cursorDot;
+    private View cursor,cursorInner,cursorDot;
     private WindowManager.LayoutParams cursorLp;
     private boolean cursorShown;
 
@@ -53,7 +55,7 @@ public final class AirControlService extends Service implements Camera.PreviewCa
         super.onCreate();
         float saved=getSharedPreferences(PREFS,MODE_PRIVATE).getFloat(PREF_POINTER_SENS,1.15f);
         pointerEngine.setSensitivity(saved);
-        createChannel();startForeground(42,notification("AirControl V7.1 · precision pointer"));
+        createChannel();startForeground(42,notification("AirControl V7.2 · visible pointer + reliable click"));
         tracker=new MediaPipeHandTracker(this,this);startCamera();
         if(Settings.canDrawOverlays(this)){showOverlay();createCursor();}
         fpsWindow=SystemClock.elapsedRealtime();
@@ -68,7 +70,7 @@ public final class AirControlService extends Service implements Camera.PreviewCa
     }
 
     private void createChannel(){if(Build.VERSION.SDK_INT>=26){NotificationChannel c=new NotificationChannel(CHANNEL,"AirControl camera",NotificationManager.IMPORTANCE_LOW);getSystemService(NotificationManager.class).createNotificationChannel(c);}}
-    private Notification notification(String text){Intent open=new Intent(this,MainActivity.class);PendingIntent pi=PendingIntent.getActivity(this,1,open,PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT);Notification.Builder b=Build.VERSION.SDK_INT>=26?new Notification.Builder(this,CHANNEL):new Notification.Builder(this);return b.setSmallIcon(android.R.drawable.ic_menu_camera).setContentTitle("AirControl V7.1").setContentText(text).setOngoing(true).setContentIntent(pi).build();}
+    private Notification notification(String text){Intent open=new Intent(this,MainActivity.class);PendingIntent pi=PendingIntent.getActivity(this,1,open,PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT);Notification.Builder b=Build.VERSION.SDK_INT>=26?new Notification.Builder(this,CHANNEL):new Notification.Builder(this);return b.setSmallIcon(android.R.drawable.ic_menu_camera).setContentTitle("AirControl V7.2").setContentText(text).setOngoing(true).setContentIntent(pi).build();}
 
     private int front(){Camera.CameraInfo info=new Camera.CameraInfo();for(int i=0;i<Camera.getNumberOfCameras();i++){Camera.getCameraInfo(i,info);if(info.facing==Camera.CameraInfo.CAMERA_FACING_FRONT)return i;}return -1;}
     private int displayDegrees(){int r=((WindowManager)getSystemService(WINDOW_SERVICE)).getDefaultDisplay().getRotation();switch(r){case Surface.ROTATION_90:return 90;case Surface.ROTATION_180:return 180;case Surface.ROTATION_270:return 270;default:return 0;}}
@@ -121,10 +123,9 @@ public final class AirControlService extends Service implements Camera.PreviewCa
 
     private void handlePointer(RemotePointerEngine.Result pr){
         if(!pr.active){hideCursor();return;}
-        showCursor(pr.x,pr.y,pr.dragging||pr.pinching);
-        if(pr.tap){AirAccessibilityService.tapNormalized(pr.x,pr.y);bubbleState(7);}
+        showCursor(pr.x,pr.y,pr.pinching);
         if(pr.dragStart){AirAccessibilityService.dragStartNormalized(pr.x,pr.y);bubbleState(8);}
-        else if(pr.dragMove){AirAccessibilityService.dragMoveNormalized(pr.x,pr.y);bubbleState(8);}
+        else if(pr.dragMove){AirAccessibilityService.dragMoveNormalized(pr.x,pr.y);bubbleState(pr.dragging?8:7);}
         if(pr.dragEnd){AirAccessibilityService.dragEndNormalized(pr.x,pr.y);bubbleState(7);}
     }
 
@@ -134,34 +135,51 @@ public final class AirControlService extends Service implements Camera.PreviewCa
 
     private void updatePointerDebug(RemotePointerEngine.Result pr,int hands){
         long now=SystemClock.uptimeMillis();if(now-lastUi<100)return;bubbleState(pr.dragging?8:(pr.active?6:1));
-        String text=String.format(Locale.US,"MODE SOURIS · %s\nMains %d · paire %s · pinch %.2f\nCurseur %.2f / %.2f · sens %.2fx\n%s · ACC %s",pr.state,hands,pr.pairFound?"oui":"non",pr.pinchRatio,pr.x,pr.y,pointerEngine.getSensitivity(),pr.dragging?"DRAG":(pr.pinching?"PINCH":"MOVE"),AirAccessibilityService.lastGestureStatus());setStatus(text);
+        String text=String.format(Locale.US,"MODE SOURIS · %s\nMains %d · paire %s · pinch %.2f\nCurseur %.2f / %.2f · sens %.2fx\n%s · %s · ACC %s",pr.state,hands,pr.pairFound?"oui":"non",pr.pinchRatio,pr.x,pr.y,pointerEngine.getSensitivity(),cursorError,pr.dragging?"DRAG":(pr.pinching?"TOUCH":"MOVE"),AirAccessibilityService.lastGestureStatus());setStatus(text);
     }
 
     private void updateDebug(){long now=SystemClock.uptimeMillis();if(now-lastUi<140)return;LandmarkGestureEngine.DebugState d=engine.debug();boolean acc=AirAccessibilityService.isReady();int s=!acc?4:(d.handFound?1:(d.grace?5:0));bubbleState(s);String ml=mlError!=null?"ERR":"OK";long lock=Math.max(0,SWIPE_ACTION_LOCK_MS-(now-lastSwipeActionMs));String text=String.format(Locale.US,"MediaPipe %s · %.1f fps · %d ms\nMAIN %s · tracking %s%s\n%s · v %.2f · d %.2f · coh %.0f%%\nlock %d ms · sens souris %.2fx\nACC %s · %s",ml,mlFps,inferenceMs,d.handFound?"oui":"non",d.tracking?"oui":"non",d.grace?" · mémoire":"",d.state,d.speed,d.displacement,d.coherence*100f,lock,pointerEngine.getSensitivity(),AirAccessibilityService.state(this),AirAccessibilityService.lastGestureStatus());setStatus(text);}
 
+    private GradientDrawable circle(int color){GradientDrawable g=new GradientDrawable();g.setShape(GradientDrawable.OVAL);g.setColor(color);return g;}
+
     private void createCursor(){
+        if(Looper.myLooper()!=Looper.getMainLooper()){ui.post(this::createCursor);return;}
+        if(cursor!=null)return;
         if(wm==null)wm=(WindowManager)getSystemService(WINDOW_SERVICE);
-        FrameLayout holder=new FrameLayout(this);
-        GradientDrawable halo=new GradientDrawable();halo.setShape(GradientDrawable.OVAL);halo.setColor(0xD9FFFFFF);halo.setStroke(dp(3),0xFF1976D2);holder.setBackground(halo);
-        cursorDot=new View(this);GradientDrawable dot=new GradientDrawable();dot.setShape(GradientDrawable.OVAL);dot.setColor(0xFF0D47A1);cursorDot.setBackground(dot);
-        FrameLayout.LayoutParams dotLp=new FrameLayout.LayoutParams(dp(8),dp(8),Gravity.CENTER);holder.addView(cursorDot,dotLp);
+        FrameLayout holder=new FrameLayout(this);holder.setBackground(circle(0xFF101418));holder.setPadding(dp(3),dp(3),dp(3),dp(3));
+        cursorInner=new View(this);GradientDrawable inner=new GradientDrawable();inner.setShape(GradientDrawable.OVAL);inner.setColor(0xFFFFFFFF);inner.setStroke(dp(3),0xFF19A7FF);cursorInner.setBackground(inner);
+        FrameLayout.LayoutParams innerLp=new FrameLayout.LayoutParams(dp(34),dp(34),Gravity.CENTER);holder.addView(cursorInner,innerLp);
+        cursorDot=new View(this);cursorDot.setBackground(circle(0xFF005BFF));FrameLayout.LayoutParams dotLp=new FrameLayout.LayoutParams(dp(10),dp(10),Gravity.CENTER);holder.addView(cursorDot,dotLp);
         cursor=holder;
-        cursorLp=new WindowManager.LayoutParams(dp(32),dp(32),WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE|WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,PixelFormat.TRANSLUCENT);
+        cursorLp=new WindowManager.LayoutParams(dp(42),dp(42),WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE|WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE|WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,PixelFormat.TRANSLUCENT);
         cursorLp.gravity=Gravity.TOP|Gravity.LEFT;cursorLp.x=0;cursorLp.y=0;
+        cursorError="CURSOR_CREATED";
     }
 
     private void showCursor(float nx,float ny,boolean pressed){
-        if(cursor==null||wm==null||cursorLp==null)return;
-        DisplayMetrics dm=new DisplayMetrics();wm.getDefaultDisplay().getRealMetrics(dm);
-        int size=dp(32),half=size/2;
-        int cx=(int)(nx*dm.widthPixels),cy=(int)(ny*dm.heightPixels);
-        cursorLp.x=clamp(cx-half,0,Math.max(0,dm.widthPixels-size));
-        cursorLp.y=clamp(cy-half,0,Math.max(0,dm.heightPixels-size));
-        GradientDrawable halo=new GradientDrawable();halo.setShape(GradientDrawable.OVAL);halo.setColor(pressed?0xF2D7E8FF:0xE6FFFFFF);halo.setStroke(dp(3),pressed?0xFF0D47A1:0xFF1976D2);cursor.setBackground(halo);
-        if(cursorDot!=null){GradientDrawable dot=new GradientDrawable();dot.setShape(GradientDrawable.OVAL);dot.setColor(pressed?0xFF7B1FA2:0xFF0D47A1);cursorDot.setBackground(dot);}
-        try{if(!cursorShown){wm.addView(cursor,cursorLp);cursorShown=true;}else wm.updateViewLayout(cursor,cursorLp);}catch(Exception ignored){}
+        final float x=nx,y=ny;final boolean down=pressed;
+        ui.post(()->{
+            try{
+                if(!Settings.canDrawOverlays(this)){cursorError="CURSOR_NO_PERMISSION";return;}
+                if(cursor==null||cursorLp==null)createCursor();
+                if(cursor==null||cursorLp==null||wm==null){cursorError="CURSOR_NOT_CREATED";return;}
+                DisplayMetrics dm=new DisplayMetrics();wm.getDefaultDisplay().getRealMetrics(dm);
+                int size=dp(42),half=size/2;
+                int px=(int)(x*dm.widthPixels),py=(int)(y*dm.heightPixels);
+                cursorLp.x=clamp(px-half,0,Math.max(0,dm.widthPixels-size));
+                cursorLp.y=clamp(py-half,0,Math.max(0,dm.heightPixels-size));
+                if(cursorInner!=null){GradientDrawable inner=new GradientDrawable();inner.setShape(GradientDrawable.OVAL);inner.setColor(down?0xFFFFF4CC:0xFFFFFFFF);inner.setStroke(dp(3),down?0xFFFF8A00:0xFF19A7FF);cursorInner.setBackground(inner);}
+                if(cursorDot!=null)cursorDot.setBackground(circle(down?0xFFFF3D00:0xFF005BFF));
+                cursor.setAlpha(1f);cursor.setVisibility(View.VISIBLE);
+                if(!cursorShown){wm.addView(cursor,cursorLp);cursorShown=true;cursorError="CURSOR_VISIBLE";}
+                else{wm.updateViewLayout(cursor,cursorLp);cursorError="CURSOR_VISIBLE";}
+            }catch(Exception e){cursorShown=false;cursorError="CURSOR_ERR_"+e.getClass().getSimpleName();}
+        });
     }
-    private void hideCursor(){if(cursorShown&&wm!=null&&cursor!=null){try{wm.removeView(cursor);}catch(Exception ignored){}cursorShown=false;}}
+
+    private void hideCursor(){
+        ui.post(()->{if(cursorShown&&wm!=null&&cursor!=null){try{wm.removeView(cursor);}catch(Exception ignored){}cursorShown=false;cursorError="CURSOR_HIDDEN";}});
+    }
 
     private void showOverlay(){
         wm=(WindowManager)getSystemService(WINDOW_SERVICE);WindowManager.LayoutParams p=new WindowManager.LayoutParams(WindowManager.LayoutParams.WRAP_CONTENT,WindowManager.LayoutParams.WRAP_CONTENT,WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE|WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,PixelFormat.TRANSLUCENT);p.gravity=Gravity.TOP|Gravity.END;p.x=6;p.y=180;
@@ -191,10 +209,10 @@ public final class AirControlService extends Service implements Camera.PreviewCa
     }
 
     private void updateSensitivityLabel(){if(sensitivityLabel!=null)sensitivityLabel.setText(String.format(Locale.US,"Sensibilité souris : %.2fx",pointerEngine.getSensitivity()));}
-    private void bubbleState(int s){if(bubble==null)return;final int bg;final String t;switch(s){case 1:bg=0xFF246B3B;t="AC\nTRACK";break;case 2:bg=0xFF176B77;t="AC\nSWIPE";break;case 3:bg=0xFF7A2525;t="AC\nML ERR";break;case 4:bg=0xFF8B1E1E;t="AC\nACC OFF";break;case 5:bg=0xFF675C20;t="AC\nHOLD";break;case 6:bg=0xFF384E8A;t="AC\nMOUSE";break;case 7:bg=0xFF5A3F8B;t="AC\nCLICK";break;case 8:bg=0xFF7A3C88;t="AC\nDRAG";break;default:bg=0xFF343840;t="AC\nAUTO";}bubble.post(()->{bubble.setText(t);bubble.setBackgroundColor(bg);});}
+    private void bubbleState(int s){if(bubble==null)return;final int bg;final String t;switch(s){case 1:bg=0xFF246B3B;t="AC\nTRACK";break;case 2:bg=0xFF176B77;t="AC\nSWIPE";break;case 3:bg=0xFF7A2525;t="AC\nML ERR";break;case 4:bg=0xFF8B1E1E;t="AC\nACC OFF";break;case 5:bg=0xFF675C20;t="AC\nHOLD";break;case 6:bg=0xFF384E8A;t="AC\nMOUSE";break;case 7:bg=0xFF5A3F8B;t="AC\nTOUCH";break;case 8:bg=0xFF7A3C88;t="AC\nDRAG";break;default:bg=0xFF343840;t="AC\nAUTO";}bubble.post(()->{bubble.setText(t);bubble.setBackgroundColor(bg);});}
     private void setStatus(String s){lastUi=SystemClock.uptimeMillis();if(status!=null)status.post(()->status.setText(s));}
     private int dp(int n){return(int)(n*getResources().getDisplayMetrics().density+.5f);}
 
-    @Override public void onDestroy(){hideCursor();if(camera!=null){try{camera.setPreviewCallbackWithBuffer(null);camera.stopPreview();camera.release();}catch(Exception ignored){}camera=null;}if(texture!=null)try{texture.release();}catch(Exception ignored){}if(tracker!=null)try{tracker.close();}catch(Exception ignored){}if(wm!=null&&panel!=null)try{wm.removeView(panel);}catch(Exception ignored){}if(frameBitmap!=null&&!frameBitmap.isRecycled())frameBitmap.recycle();stopForeground(true);super.onDestroy();}
+    @Override public void onDestroy(){if(Looper.myLooper()==Looper.getMainLooper()){if(cursorShown&&wm!=null&&cursor!=null)try{wm.removeView(cursor);}catch(Exception ignored){}}if(camera!=null){try{camera.setPreviewCallbackWithBuffer(null);camera.stopPreview();camera.release();}catch(Exception ignored){}camera=null;}if(texture!=null)try{texture.release();}catch(Exception ignored){}if(tracker!=null)try{tracker.close();}catch(Exception ignored){}if(wm!=null&&panel!=null)try{wm.removeView(panel);}catch(Exception ignored){}if(frameBitmap!=null&&!frameBitmap.isRecycled())frameBitmap.recycle();stopForeground(true);super.onDestroy();}
     @Override public IBinder onBind(Intent i){return null;}
 }
