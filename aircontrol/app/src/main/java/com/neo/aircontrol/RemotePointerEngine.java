@@ -16,9 +16,9 @@ public final class RemotePointerEngine {
 
     private static final int ACTIVATE_FRAMES=3;
     private static final long PAIR_HOLD_MS=420;
-    private static final long DRAG_HOLD_MS=380;
-    private static final long CLICK_COOLDOWN_MS=240;
-    private static final float PINCH_ON=.47f, PINCH_OFF=.64f;
+    private static final long DRAG_HOLD_MS=520;
+    private static final long CLICK_COOLDOWN_MS=220;
+    private static final float PINCH_ON=.55f, PINCH_OFF=.74f;
     private static final float CURSOR_MIN=.035f, CURSOR_MAX=.965f;
     private static final float BASE_GAIN=1.55f;
     private static final float POINTER_DEADZONE=.0022f;
@@ -46,7 +46,7 @@ public final class RemotePointerEngine {
             for(int i=0;i<count;i++){
                 if(i==fist||!valid(xs,ys,zs,i))continue;
                 float pinch=pinchRatio2d(xs[i],ys[i]);
-                if(isPointer(xs[i],ys[i],zs[i])||(active&&pinch<PINCH_OFF+.20f)){
+                if(isPointer(xs[i],ys[i],zs[i])||(active&&pinch<PINCH_OFF+.22f)){
                     pointer=i;break;
                 }
             }
@@ -65,8 +65,12 @@ public final class RemotePointerEngine {
 
         if(active&&now-lastPairMs>PAIR_HOLD_MS){
             if(pinching){
-                out.dragEnd=true;out.x=cx;out.y=cy;
-                if(!dragging)out.tap=true;
+                long held=now-pinchStartMs;
+                if(dragging)out.dragEnd=true;
+                else if(held>=45&&held<DRAG_HOLD_MS+180&&now>=clickCooldownUntil){
+                    out.tap=true;clickCooldownUntil=now+CLICK_COOLDOWN_MS;
+                }
+                out.x=cx;out.y=cy;
             }
             active=false;pinching=false;dragging=false;
             haveFingerReference=false;havePinchFilter=false;
@@ -84,7 +88,7 @@ public final class RemotePointerEngine {
         if(!pair){
             haveFingerReference=false;
             out.x=cx;out.y=cy;out.pinching=pinching;out.dragging=dragging;
-            out.state=pinching?"PINCH_HOLD":"MOUSE_HOLD";
+            out.state=pinching?(dragging?"DRAG_HOLD":"PINCH_HOLD"):"MOUSE_HOLD";
             return out;
         }
 
@@ -100,18 +104,21 @@ public final class RemotePointerEngine {
             if(dist>=POINTER_DEADZONE){
                 float acceleration=dist>.045f?1.18f:(dist>.018f?1.05f:.88f);
                 float gain=BASE_GAIN*sensitivity*acceleration;
-                cx=clamp(cx+dx*gain,CURSOR_MIN,CURSOR_MAX);
-                cy=clamp(cy+dy*gain,CURSOR_MIN,CURSOR_MAX);
+                // Complete inversion requested by the user: both axes move opposite to camera landmark motion.
+                cx=clamp(cx-dx*gain,CURSOR_MIN,CURSOR_MAX);
+                cy=clamp(cy-dy*gain,CURSOR_MIN,CURSOR_MAX);
             }
         }
 
         float rawPinch=pinchRatio2d(x,y);
         if(!havePinchFilter){filteredPinch=rawPinch;havePinchFilter=true;}
-        else filteredPinch+=clamp(rawPinch-filteredPinch,-.22f,.22f)*.58f;
-        float ratio=filteredPinch*.72f+rawPinch*.28f;
+        else filteredPinch+=clamp(rawPinch-filteredPinch,-.24f,.24f)*.62f;
+        float ratio=filteredPinch*.62f+rawPinch*.38f;
         out.pinchRatio=ratio;out.x=cx;out.y=cy;
 
-        boolean pinchCandidate=pinching ? (ratio<PINCH_OFF || rawPinch<PINCH_ON) : (ratio<PINCH_ON && rawPinch<PINCH_OFF);
+        boolean pinchCandidate=pinching
+                ? (ratio<PINCH_OFF || rawPinch<PINCH_ON+.08f)
+                : (ratio<PINCH_ON || rawPinch<PINCH_ON-.04f);
 
         if(!pinching){
             pinchOffFrames=0;
@@ -119,7 +126,6 @@ public final class RemotePointerEngine {
                 pinchOnFrames++;
                 if(pinchOnFrames>=2){
                     pinching=true;dragging=false;pinchStartMs=now;pinchOnFrames=0;
-                    out.dragStart=true;
                 }
             }else pinchOnFrames=0;
         }else{
@@ -128,23 +134,25 @@ public final class RemotePointerEngine {
                 pinchOffFrames++;
                 if(pinchOffFrames>=2){
                     long held=now-pinchStartMs;
-                    out.dragEnd=true;
-                    if(held<DRAG_HOLD_MS)out.tap=true;
-                    pinching=false;dragging=false;pinchOffFrames=0;
-                    clickCooldownUntil=now+CLICK_COOLDOWN_MS;
-                }else out.dragMove=true;
+                    if(dragging){out.dragEnd=true;dragging=false;}
+                    else if(held>=45&&now>=clickCooldownUntil){
+                        out.tap=true;clickCooldownUntil=now+CLICK_COOLDOWN_MS;
+                    }
+                    pinching=false;pinchOffFrames=0;
+                }else if(dragging)out.dragMove=true;
             }else{
                 pinchOffFrames=0;
-                if(!dragging&&now-pinchStartMs>=DRAG_HOLD_MS)dragging=true;
-                out.dragMove=true;
+                if(!dragging&&now-pinchStartMs>=DRAG_HOLD_MS){
+                    dragging=true;out.dragStart=true;
+                }else if(dragging)out.dragMove=true;
             }
         }
 
         out.pinching=pinching;out.dragging=dragging;
         if(out.tap)out.state="CLICK";
-        else if(out.dragStart)out.state="TOUCH_DOWN";
+        else if(out.dragStart)out.state="DRAG_START";
         else if(dragging)out.state="DRAG";
-        else if(pinching)out.state="PINCH";
+        else if(pinching)out.state="CLICK_ARMED";
         else out.state="MOUSE";
         return out;
     }
