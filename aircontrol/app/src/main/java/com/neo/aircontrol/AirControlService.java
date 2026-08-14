@@ -8,6 +8,7 @@ import android.graphics.drawable.GradientDrawable;
 import android.hardware.Camera;
 import android.os.*;
 import android.provider.Settings;
+import android.util.DisplayMetrics;
 import android.view.*;
 import android.widget.*;
 
