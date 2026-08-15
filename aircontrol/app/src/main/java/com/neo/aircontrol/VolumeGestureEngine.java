@@ -47,6 +47,7 @@ public final class VolumeGestureEngine {
                 out.handY=filteredY;out.deltaY=dy;
 
                 if(now-lastStepMs>=STEP_COOLDOWN_MS){
+                    // Requested direction: hand down lowers volume, hand up raises volume.
                     if(dy<=-MOVE_STEP){
                         out.volumeUp=true;lastStepMs=now;baselineY-=MOVE_STEP;
                     }else if(dy>=MOVE_STEP){
