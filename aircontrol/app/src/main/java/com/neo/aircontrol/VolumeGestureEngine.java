@@ -47,11 +47,12 @@ public final class VolumeGestureEngine {
                 out.handY=filteredY;out.deltaY=dy;
 
                 if(now-lastStepMs>=STEP_COOLDOWN_MS){
-                    // Requested direction: hand down lowers volume, hand up raises volume.
+                    // Camera-space direction is opposite to the physical motion observed on device.
+                    // Therefore invert the emitted volume commands: physical hand down = volume down.
                     if(dy<=-MOVE_STEP){
-                        out.volumeUp=true;lastStepMs=now;baselineY-=MOVE_STEP;
+                        out.volumeDown=true;lastStepMs=now;baselineY-=MOVE_STEP;
                     }else if(dy>=MOVE_STEP){
-                        out.volumeDown=true;lastStepMs=now;baselineY+=MOVE_STEP;
+                        out.volumeUp=true;lastStepMs=now;baselineY+=MOVE_STEP;
                     }
                 }
             }
