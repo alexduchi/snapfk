@@ -7,6 +7,7 @@ import android.os.SystemClock;
 import com.google.mediapipe.framework.image.BitmapImageBuilder;
 import com.google.mediapipe.framework.image.MPImage;
 import com.google.mediapipe.tasks.components.containers.Category;
+import com.google.mediapipe.tasks.components.containers.Landmark;
 import com.google.mediapipe.tasks.components.containers.NormalizedLandmark;
 import com.google.mediapipe.tasks.core.BaseOptions;
 import com.google.mediapipe.tasks.core.Delegate;
@@ -33,6 +34,7 @@ public final class MediaPipeHandTracker implements AutoCloseable {
         float anchorX,anchorY,palm;
         String handed="";
         float handedScore;
+        float worldShape;
     }
 
     private static final class Slot {
@@ -42,6 +44,7 @@ public final class MediaPipeHandTracker implements AutoCloseable {
         float anchorX,anchorY;
         String handed="";
         float handedScore;
+        float worldShape;
     }
 
     private final Listener listener;
@@ -108,6 +111,7 @@ public final class MediaPipeHandTracker implements AutoCloseable {
         lastDeliveredTimestamp=ts;
 
         List<List<NormalizedLandmark>> hands=result.landmarks();
+        List<List<Landmark>> worldHands=result.worldLandmarks();
         List<List<Category>> handedness=result.handedness();
         if(hands==null||hands.isEmpty()){
             expireSlots(ts);
@@ -129,6 +133,17 @@ public final class MediaPipeHandTracker implements AutoCloseable {
             d.anchorX=(d.x[0]+d.x[5]+d.x[9]+d.x[17])*.25f;
             d.anchorY=(d.y[0]+d.y[5]+d.y[9]+d.y[17])*.25f;
             d.palm=Math.max(.035f,dist(d.x[5],d.y[5],d.x[17],d.y[17]));
+
+            if(worldHands!=null&&h<worldHands.size()){
+                List<Landmark> world=worldHands.get(h);
+                if(world!=null&&world.size()>=21){
+                    float palmW=dist3(world.get(5),world.get(17));
+                    float palmL=dist3(world.get(0),world.get(9));
+                    float indexL=dist3(world.get(5),world.get(8));
+                    if(palmW>1e-4f)d.worldShape=(palmL+indexL*.45f)/palmW;
+                }
+            }
+
             if(handedness!=null&&h<handedness.size()){
                 List<Category> cats=handedness.get(h);
                 if(cats!=null&&!cats.isEmpty()&&cats.get(0)!=null){
@@ -147,7 +162,7 @@ public final class MediaPipeHandTracker implements AutoCloseable {
         }
 
         expireSlots(ts);
-        int[] detForSlot=assignDetections(detections,valid,ts);
+        int[] detForSlot=assignDetections(detections,valid);
         float[][] xs=new float[valid][21],ys=new float[valid][21],zs=new float[valid][21];
         int out=0;
         for(int s=0;s<MAX_HANDS;s++){
@@ -166,7 +181,7 @@ public final class MediaPipeHandTracker implements AutoCloseable {
         for(Slot s:slots)if(s.valid&&ts-s.lastSeen>SLOT_MEMORY_MS)s.valid=false;
     }
 
-    private int[] assignDetections(Detection[] d,int count,long ts){
+    private int[] assignDetections(Detection[] d,int count){
         int[] result={-1,-1};
         boolean a=slots[0].valid,b=slots[1].valid;
         if(count==1){
@@ -205,6 +220,10 @@ public final class MediaPipeHandTracker implements AutoCloseable {
         float c=dist(s.anchorX,s.anchorY,d.anchorX,d.anchorY);
         if(!s.handed.isEmpty()&&!d.handed.isEmpty()&&!s.handed.equalsIgnoreCase(d.handed)
                 &&Math.min(s.handedScore,d.handedScore)>=.55f)c+=.24f;
+        if(s.worldShape>0f&&d.worldShape>0f){
+            float ratio=Math.max(s.worldShape,d.worldShape)/Math.max(.001f,Math.min(s.worldShape,d.worldShape));
+            c+=Math.min(.11f,(ratio-1f)*.16f);
+        }
         return c;
     }
 
@@ -212,7 +231,7 @@ public final class MediaPipeHandTracker implements AutoCloseable {
         long gap=s.valid?Math.max(0,ts-s.lastSeen):Long.MAX_VALUE;
         if(!s.valid||gap>FILTER_RESET_GAP_MS){
             System.arraycopy(d.x,0,s.x,0,21);System.arraycopy(d.y,0,s.y,0,21);System.arraycopy(d.z,0,s.z,0,21);
-            s.anchorX=d.anchorX;s.anchorY=d.anchorY;s.valid=true;s.lastSeen=ts;
+            s.anchorX=d.anchorX;s.anchorY=d.anchorY;s.valid=true;s.lastSeen=ts;s.worldShape=d.worldShape;
             updateHandedness(s,d);
             return;
         }
@@ -240,6 +259,7 @@ public final class MediaPipeHandTracker implements AutoCloseable {
         }
         s.anchorX=(s.x[0]+s.x[5]+s.x[9]+s.x[17])*.25f;
         s.anchorY=(s.y[0]+s.y[5]+s.y[9]+s.y[17])*.25f;
+        if(d.worldShape>0f)s.worldShape=s.worldShape<=0f?d.worldShape:(s.worldShape*.82f+d.worldShape*.18f);
         s.valid=true;s.lastSeen=ts;
         updateHandedness(s,d);
     }
@@ -252,6 +272,7 @@ public final class MediaPipeHandTracker implements AutoCloseable {
     }
 
     private static float dist(float ax,float ay,float bx,float by){float dx=ax-bx,dy=ay-by;return(float)Math.sqrt(dx*dx+dy*dy);}
+    private static float dist3(Landmark a,Landmark b){float dx=a.x()-b.x(),dy=a.y()-b.y(),dz=a.z()-b.z();return(float)Math.sqrt(dx*dx+dy*dy+dz*dz);}
 
     public boolean ready(){return landmarker!=null;}
     public boolean busy(){return busy.get();}
