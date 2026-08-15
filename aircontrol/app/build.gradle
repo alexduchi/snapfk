@@ -7,8 +7,8 @@ android {
         applicationId 'com.neo.aircontrol'
         minSdk 26
         targetSdk 35
-        versionCode 14
-        versionName '7.4-stable-pointer-volume-fix'
+        versionCode 15
+        versionName '7.5-stable-hand-tracking'
     }
 }
 
