@@ -9,7 +9,7 @@ import android.widget.FrameLayout;
 import android.widget.VideoView;
 
 public class V16MainActivity extends V14MainActivity {
-    @Override protected void onCreate(Bundle state) {
+    @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         getWindow().getDecorView().post(() -> {
             VideoView video = findVideoView(getWindow().getDecorView());
