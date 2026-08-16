@@ -14,7 +14,7 @@ public class BootstrapActivity extends Activity {
         if (Build.VERSION.SDK_INT >= 26) startForegroundService(service);
         else startService(service);
 
-        Intent main = new Intent(this, MainActivity.class);
+        Intent main = new Intent(this, StableMainActivity.class);
         main.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         startActivity(main);
         finish();
