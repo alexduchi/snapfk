@@ -34,20 +34,16 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           import struct, zlib, binascii
-
           root = Path('packtemplate/src/main')
           draw = root / 'res/drawable-nodpi'
           xml = root / 'res/xml'
           draw.mkdir(parents=True, exist_ok=True)
           xml.mkdir(parents=True, exist_ok=True)
-
           def chunk(kind, data):
               body = kind + data
               return struct.pack('>I', len(data)) + body + struct.pack('>I', binascii.crc32(body) & 0xffffffff)
-
           raw = b'\x00' + b'\x00\x00\x00\x00'
           png = b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB',1,1,8,6,0,0,0)) + chunk(b'IDAT', zlib.compress(raw, 9)) + chunk(b'IEND', b'')
-
           appfilter = ['<?xml version="1.0" encoding="utf-8"?>', '<resources>']
           drawable = ['<?xml version="1.0" encoding="utf-8"?>', '<resources>', '    <category title="Néo Dynamic" />']
           for i in range(1024):
@@ -107,3 +103,5 @@ jobs:
           name: NeoIconLabV2-APK
           path: NeoIconLabV2/deliverables/*
           if-no-files-found: error
+
+# v2 build trigger
