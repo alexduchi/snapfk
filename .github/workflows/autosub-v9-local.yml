@@ -36,3 +36,4 @@ jobs:
           name: AutoSub-V9-Local
           path: AutoSub-V9-Local.apk
           compression-level: 0
+# latest-source trigger
