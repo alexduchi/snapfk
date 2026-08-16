@@ -37,10 +37,14 @@ final class SubtitleOverlay extends CanvasOverlay {
     private final float maxTextWidth;
 
     SubtitleOverlay(List<Segment> segments) {
-        this(segments, 1920, 1080, 1.0f);
+        this(segments, 1920, 1080, 1.0f, 50, 84);
     }
 
     SubtitleOverlay(List<Segment> segments, int videoWidth, int videoHeight, float userScale) {
+        this(segments, videoWidth, videoHeight, userScale, 50, 84);
+    }
+
+    SubtitleOverlay(List<Segment> segments, int videoWidth, int videoHeight, float userScale, int xPercent, int yPercent) {
         super(false);
         setCanvasSize(CANVAS_W, CANVAS_H);
         this.segments = segments;
@@ -52,23 +56,22 @@ final class SubtitleOverlay extends CanvasOverlay {
         portrait = h > w;
 
         float overlayScale;
-        float anchorY;
         if (aspect < 0.68f) {
             baseFontSize = 38f;
             maxTextWidth = CANVAS_W * 0.76f;
             overlayScale = 0.78f;
-            anchorY = -0.72f;
         } else if (aspect < 1.0f) {
             baseFontSize = 44f;
             maxTextWidth = CANVAS_W * 0.80f;
             overlayScale = 0.84f;
-            anchorY = -0.74f;
         } else {
             baseFontSize = 56f;
             maxTextWidth = CANVAS_W * 0.84f;
             overlayScale = 0.92f;
-            anchorY = -0.80f;
         }
+
+        float xAnchor = clamp((xPercent - 50) / 50f, -0.94f, 0.94f);
+        float yAnchor = clamp(1f - (Math.max(0, Math.min(100, yPercent)) / 50f), -0.94f, 0.94f);
 
         textPaint.setColor(Color.WHITE);
         textPaint.setTextAlign(Paint.Align.CENTER);
@@ -77,11 +80,15 @@ final class SubtitleOverlay extends CanvasOverlay {
         bgPaint.setColor(0xD5000000);
 
         settings = new StaticOverlaySettings.Builder()
-                .setBackgroundFrameAnchor(0f, anchorY)
+                .setBackgroundFrameAnchor(xAnchor, yAnchor)
                 .setOverlayFrameAnchor(0f, 0f)
                 .setScale(overlayScale, overlayScale)
                 .setAlphaScale(1f)
                 .build();
+    }
+
+    private static float clamp(float v, float min, float max) {
+        return Math.max(min, Math.min(max, v));
     }
 
     @Override
