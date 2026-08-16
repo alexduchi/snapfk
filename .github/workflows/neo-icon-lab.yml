@@ -21,6 +21,7 @@ jobs:
       - name: Restore source
         run: |
           cat neo-icon-lab-src.part-aa neo-icon-lab-src.part-ab neo-icon-lab-src.part-ac | base64 -d > neo-icon-lab-src.tar.gz
+          echo '37dc2d374ba75bb037ed506abb26cd9dbd0c99e15c2761a8fedd74a9e60857d4  neo-icon-lab-src.tar.gz' | sha256sum -c -
           mkdir neo-icon-lab
           tar -xzf neo-icon-lab-src.tar.gz -C neo-icon-lab
           test -f neo-icon-lab/app/src/main/AndroidManifest.xml
