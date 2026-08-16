@@ -25,17 +25,46 @@ final class SubtitleOverlay extends CanvasOverlay {
     }
 
     private static final int CANVAS_W = 1280;
-    private static final int CANVAS_H = 320;
+    private static final int CANVAS_H = 360;
 
     private final List<Segment> segments;
     private final Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.SUBPIXEL_TEXT_FLAG);
     private final Paint bgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final OverlaySettings settings;
+    private final boolean portrait;
+    private final float userScale;
+    private final float baseFontSize;
+    private final float maxTextWidth;
 
-    SubtitleOverlay(List<Segment> segments) {
+    SubtitleOverlay(List<Segment> segments, int videoWidth, int videoHeight, float userScale) {
         super(false);
         setCanvasSize(CANVAS_W, CANVAS_H);
         this.segments = segments;
+        this.userScale = Math.max(0.60f, Math.min(1.50f, userScale));
+
+        int w = Math.max(1, videoWidth);
+        int h = Math.max(1, videoHeight);
+        float aspect = w / (float) h;
+        portrait = h > w;
+
+        float overlayScale;
+        float anchorY;
+        if (aspect < 0.68f) {
+            baseFontSize = 38f;
+            maxTextWidth = CANVAS_W * 0.76f;
+            overlayScale = 0.78f;
+            anchorY = -0.72f;
+        } else if (aspect < 1.0f) {
+            baseFontSize = 44f;
+            maxTextWidth = CANVAS_W * 0.80f;
+            overlayScale = 0.84f;
+            anchorY = -0.74f;
+        } else {
+            baseFontSize = 56f;
+            maxTextWidth = CANVAS_W * 0.84f;
+            overlayScale = 0.92f;
+            anchorY = -0.80f;
+        }
 
         textPaint.setColor(Color.WHITE);
         textPaint.setTextAlign(Paint.Align.CENTER);
@@ -44,9 +73,9 @@ final class SubtitleOverlay extends CanvasOverlay {
         bgPaint.setColor(0xD5000000);
 
         settings = new StaticOverlaySettings.Builder()
-                .setBackgroundFrameAnchor(0f, -0.78f)
+                .setBackgroundFrameAnchor(0f, anchorY)
                 .setOverlayFrameAnchor(0f, 0f)
-                .setScale(0.92f, 0.92f)
+                .setScale(overlayScale, overlayScale)
                 .setAlphaScale(1f)
                 .build();
     }
@@ -69,39 +98,38 @@ final class SubtitleOverlay extends CanvasOverlay {
             }
         }
         if (value == null || value.trim().isEmpty()) return;
-
         value = value.trim();
-        final float fontSize = 58f;
-        textPaint.setTextSize(fontSize);
 
-        ArrayList<String> lines = wrap(value, CANVAS_W * 0.82f);
-        if (lines.size() > 3) {
-            ArrayList<String> compact = new ArrayList<>();
-            compact.add(lines.get(0));
-            compact.add(lines.get(1));
-            StringBuilder rest = new StringBuilder(lines.get(2));
-            for (int i = 3; i < lines.size(); i++) rest.append(' ').append(lines.get(i));
-            compact.add(rest.toString());
-            lines = compact;
+        float minFont = portrait ? 27f : 32f;
+        float fontSize = Math.max(minFont, baseFontSize * userScale);
+        ArrayList<String> lines;
+        int preferredLines = portrait ? 4 : 3;
+
+        while (true) {
+            textPaint.setTextSize(fontSize);
+            lines = wrap(value, maxTextWidth);
+            if (lines.size() <= preferredLines || fontSize <= minFont) break;
+            fontSize -= 2f;
         }
 
-        float lineHeight = fontSize * 1.22f;
+        float lineHeight = fontSize * 1.18f;
         float centerX = CANVAS_W / 2f;
-        float blockHeight = lines.size() * lineHeight;
-        float firstBaseline = CANVAS_H / 2f - blockHeight / 2f + lineHeight - 8f;
+        float blockHeight = Math.max(lineHeight, lines.size() * lineHeight);
+        float firstBaseline = CANVAS_H / 2f - blockHeight / 2f + lineHeight - fontSize * 0.12f;
 
         float maxLineWidth = 0f;
         for (String line : lines) maxLineWidth = Math.max(maxLineWidth, textPaint.measureText(line));
-        float padX = 34f;
-        float padY = 22f;
-        float left = Math.max(22f, centerX - maxLineWidth / 2f - padX);
-        float right = Math.min(CANVAS_W - 22f, centerX + maxLineWidth / 2f + padX);
-        float top = firstBaseline - fontSize - padY;
-        float bottom = firstBaseline + (lines.size() - 1) * lineHeight + 18f + padY;
+        float padX = Math.max(24f, fontSize * 0.58f);
+        float padY = Math.max(16f, fontSize * 0.34f);
+        float left = Math.max(18f, centerX - maxLineWidth / 2f - padX);
+        float right = Math.min(CANVAS_W - 18f, centerX + maxLineWidth / 2f + padX);
+        float top = Math.max(8f, firstBaseline - fontSize - padY);
+        float bottom = Math.min(CANVAS_H - 8f, firstBaseline + (lines.size() - 1) * lineHeight + fontSize * 0.30f + padY);
 
-        canvas.drawRoundRect(new RectF(left, top, right, bottom), 24f, 24f, bgPaint);
+        canvas.drawRoundRect(new RectF(left, top, right, bottom), 22f, 22f, bgPaint);
         for (int i = 0; i < lines.size(); i++) {
-            canvas.drawText(lines.get(i), centerX, firstBaseline + i * lineHeight, textPaint);
+            float y = firstBaseline + i * lineHeight;
+            if (y <= CANVAS_H - 10f) canvas.drawText(lines.get(i), centerX, y, textPaint);
         }
     }
 
