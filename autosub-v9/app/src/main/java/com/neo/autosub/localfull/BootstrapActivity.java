@@ -10,11 +10,11 @@ public class BootstrapActivity extends Activity {
         super.onCreate(state);
         Intent service = new Intent(this, ProcessingKeepAliveService.class);
         service.putExtra(ProcessingKeepAliveService.EXTRA_TEXT,
-                "AutoSub V14 prêt : traitement protégé en arrière-plan.");
+                "AutoSub V16 prêt : traitement protégé en arrière-plan.");
         if (Build.VERSION.SDK_INT >= 26) startForegroundService(service);
         else startService(service);
 
-        Intent main = new Intent(this, V14MainActivity.class);
+        Intent main = new Intent(this, V16MainActivity.class);
         main.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         startActivity(main);
         finish();
