@@ -1,0 +1,65 @@
+name: Neo Icon Lab APK
+
+on:
+  push:
+    branches: [neo-icon-lab]
+    paths:
+      - 'neo-icon-lab-src.part-*'
+      - '.github/workflows/neo-icon-lab.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore source
+        run: |
+          cat neo-icon-lab-src.part-aa neo-icon-lab-src.part-ab neo-icon-lab-src.part-ac | base64 -d > neo-icon-lab-src.tar.gz
+          mkdir neo-icon-lab
+          tar -xzf neo-icon-lab-src.tar.gz -C neo-icon-lab
+          test -f neo-icon-lab/app/src/main/AndroidManifest.xml
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK
+        run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0' 'platform-tools'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.5.0'
+
+      - name: Compile APK
+        working-directory: neo-icon-lab
+        run: gradle --stacktrace :app:assembleDebug
+
+      - name: Verify APK
+        working-directory: neo-icon-lab
+        run: |
+          APK=app/build/outputs/apk/debug/app-debug.apk
+          test -s "$APK"
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)
+          AAPT=$(find "$ANDROID_HOME/build-tools" -name aapt -type f | sort -V | tail -1)
+          "$APKSIGNER" verify --verbose --print-certs "$APK" | tee signature-report.txt
+          "$AAPT" dump badging "$APK" | tee apk-badging.txt
+          mkdir -p deliverables
+          cp "$APK" deliverables/NeoIconLab.apk
+          cp README.md deliverables/README.md
+          cp signature-report.txt apk-badging.txt deliverables/
+          sha256sum deliverables/NeoIconLab.apk > deliverables/SHA256SUMS.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NeoIconLab-APK
+          path: neo-icon-lab/deliverables/*
+          if-no-files-found: error
