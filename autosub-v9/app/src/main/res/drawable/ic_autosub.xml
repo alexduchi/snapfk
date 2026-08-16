@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Dark rounded app tile -->
+    <path
+        android:fillColor="#0A101B"
+        android:pathData="M22,6 H86 C96,6 102,12 102,22 V86 C102,96 96,102 86,102 H22 C12,102 6,96 6,86 V22 C6,12 12,6 22,6 Z" />
+
+    <!-- Video frame -->
+    <path
+        android:fillColor="#2684FF"
+        android:pathData="M23,25 H85 C90,25 93,28 93,33 V62 C93,67 90,70 85,70 H23 C18,70 15,67 15,62 V33 C15,28 18,25 23,25 Z" />
+    <path
+        android:fillColor="#0A101B"
+        android:pathData="M31,31 H77 C82,31 85,34 85,39 V57 C85,62 82,65 77,65 H31 C26,65 23,62 23,57 V39 C23,34 26,31 31,31 Z" />
+
+    <!-- Film sprockets -->
+    <path android:fillColor="#0A101B" android:pathData="M18,33 H22 V39 H18 Z M18,43 H22 V49 H18 Z M18,53 H22 V59 H18 Z M86,33 H90 V39 H86 Z M86,43 H90 V49 H86 Z M86,53 H90 V59 H86 Z" />
+
+    <!-- Play -->
+    <path
+        android:fillColor="#1FE3E0"
+        android:pathData="M45,38 L45,58 L62,48 Z" />
+
+    <!-- Subtitle bubble -->
+    <path
+        android:fillColor="#0A101B"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="4"
+        android:strokeLineJoin="round"
+        android:pathData="M25,61 H83 C88,61 91,64 91,69 V79 C91,84 88,87 83,87 H60 L54,93 L48,87 H25 C20,87 17,84 17,79 V69 C17,64 20,61 25,61 Z" />
+
+    <!-- Subtitle lines -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="4"
+        android:strokeLineCap="round"
+        android:pathData="M29,70 H79 M36,78 H67" />
+</vector>
