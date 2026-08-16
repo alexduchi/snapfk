@@ -1,0 +1,109 @@
+name: Neo Icon Lab V2 APK
+
+on:
+  push:
+    branches: [neo-icon-lab-v2]
+    paths:
+      - 'neo-v2-lean.part-*'
+      - '.github/workflows/neo-icon-lab-v2.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore V2 source
+        run: |
+          cat neo-v2-lean.part-00 neo-v2-lean.part-01 neo-v2-lean.part-02 neo-v2-lean.part-03 neo-v2-lean.part-04 | base64 -d > neo-v2-lean.tar.gz
+          echo '15dc1ea2a876d2bc9de7641a1b4c9f5467c167223cfee6146891bb00f6a0ef50  neo-v2-lean.tar.gz' | sha256sum -c -
+          tar -xzf neo-v2-lean.tar.gz
+          mv NeoIconLabV2Lean NeoIconLabV2
+          test -f NeoIconLabV2/app/src/main/AndroidManifest.xml
+          test -f NeoIconLabV2/app/src/main/assets/pack_signer.pk8
+          test -f NeoIconLabV2/app/src/main/assets/pack_signer.cer
+
+      - name: Generate dynamic icon-pack slots
+        working-directory: NeoIconLabV2
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import struct, zlib, binascii
+
+          root = Path('packtemplate/src/main')
+          draw = root / 'res/drawable-nodpi'
+          xml = root / 'res/xml'
+          draw.mkdir(parents=True, exist_ok=True)
+          xml.mkdir(parents=True, exist_ok=True)
+
+          def chunk(kind, data):
+              body = kind + data
+              return struct.pack('>I', len(data)) + body + struct.pack('>I', binascii.crc32(body) & 0xffffffff)
+
+          raw = b'\x00' + b'\x00\x00\x00\x00'
+          png = b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB',1,1,8,6,0,0,0)) + chunk(b'IDAT', zlib.compress(raw, 9)) + chunk(b'IEND', b'')
+
+          appfilter = ['<?xml version="1.0" encoding="utf-8"?>', '<resources>']
+          drawable = ['<?xml version="1.0" encoding="utf-8"?>', '<resources>', '    <category title="Néo Dynamic" />']
+          for i in range(1024):
+              name = f'neo_icon_{i:04d}'
+              (draw / f'{name}.png').write_bytes(png)
+              placeholder = f'NEO_SLOT_{i:04d}_' + ('X' * 390)
+              appfilter.append(f'    <item component="{placeholder}" drawable="{name}" />')
+              drawable.append(f'    <item drawable="{name}" />')
+          appfilter.append('</resources>')
+          drawable.append('</resources>')
+          (xml / 'appfilter.xml').write_text('\n'.join(appfilter) + '\n', encoding='utf-8')
+          (xml / 'drawable.xml').write_text('\n'.join(drawable) + '\n', encoding='utf-8')
+          (xml / 'icon_pack.xml').write_text('\n'.join(drawable) + '\n', encoding='utf-8')
+          print('generated', len(list(draw.glob('neo_icon_*.png'))), 'icon slots')
+          PY
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK
+        run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0' 'platform-tools'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.5.0'
+
+      - name: Compile V2 and pack template
+        working-directory: NeoIconLabV2
+        run: gradle --stacktrace :app:assembleDebug
+
+      - name: Verify APK and embedded pack
+        working-directory: NeoIconLabV2
+        run: |
+          APK=app/build/outputs/apk/debug/app-debug.apk
+          TEMPLATE=packtemplate/build/outputs/apk/debug/packtemplate-debug.apk
+          test -s "$APK"
+          test -s "$TEMPLATE"
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)
+          AAPT=$(find "$ANDROID_HOME/build-tools" -name aapt -type f | sort -V | tail -1)
+          "$APKSIGNER" verify --verbose --print-certs "$APK" | tee signature-report.txt
+          "$APKSIGNER" verify --verbose "$TEMPLATE"
+          "$AAPT" dump badging "$APK" | tee apk-badging.txt
+          unzip -l "$APK" | grep -q 'assets/neo-icon-pack-template.apk'
+          unzip -l "$TEMPLATE" | grep -q 'res/drawable-nodpi/neo_icon_1023.png'
+          mkdir -p deliverables
+          cp "$APK" deliverables/NeoIconLabV2.apk
+          cp README.md deliverables/README.md
+          cp signature-report.txt apk-badging.txt deliverables/
+          sha256sum deliverables/NeoIconLabV2.apk > deliverables/SHA256SUMS.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NeoIconLabV2-APK
+          path: NeoIconLabV2/deliverables/*
+          if-no-files-found: error
