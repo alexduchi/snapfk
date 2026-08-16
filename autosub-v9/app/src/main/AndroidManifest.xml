@@ -15,6 +15,7 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity android:name=".V16MainActivity" android:exported="false" android:screenOrientation="unspecified" />
         <activity android:name=".V14MainActivity" android:exported="false" android:screenOrientation="unspecified" />
         <activity android:name=".StableMainActivity" android:exported="false" android:screenOrientation="unspecified" />
         <activity android:name=".MainActivity" android:exported="false" android:screenOrientation="unspecified" />
