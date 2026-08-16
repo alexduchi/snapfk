@@ -36,6 +36,10 @@ final class SubtitleOverlay extends CanvasOverlay {
     private final float baseFontSize;
     private final float maxTextWidth;
 
+    SubtitleOverlay(List<Segment> segments) {
+        this(segments, 1920, 1080, 1.0f);
+    }
+
     SubtitleOverlay(List<Segment> segments, int videoWidth, int videoHeight, float userScale) {
         super(false);
         setCanvasSize(CANVAS_W, CANVAS_H);
