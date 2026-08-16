@@ -27,6 +27,16 @@ jobs:
           test -f NeoIconLabV2/app/src/main/AndroidManifest.xml
           test -f NeoIconLabV2/app/src/main/assets/pack_signer.pk8
           test -f NeoIconLabV2/app/src/main/assets/pack_signer.cer
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('NeoIconLabV2/app/build.gradle')
+          s = p.read_text(encoding='utf-8')
+          old = "assets.srcDir(layout.buildDirectory.dir('generated/packAssets'))"
+          new = "assets.srcDir(file(\"$buildDir/generated/packAssets\"))"
+          if old not in s:
+              raise SystemExit('Expected generated assets SourceSet line not found')
+          p.write_text(s.replace(old, new), encoding='utf-8')
+          PY
 
       - name: Generate dynamic icon-pack slots
         working-directory: NeoIconLabV2
@@ -103,5 +113,3 @@ jobs:
           name: NeoIconLabV2-APK
           path: NeoIconLabV2/deliverables/*
           if-no-files-found: error
-
-# v2 build trigger
