@@ -1,7 +1,7 @@
-name: Build AutoSub V9 Local
+name: Build AutoSub V11 Local
 on:
   push:
-    branches: [autosub-v9-local-full]
+    branches: [autosub-v11-background]
   workflow_dispatch:
 
 jobs:
@@ -30,10 +30,9 @@ jobs:
         working-directory: autosub-v9
         run: gradle :app:assembleDebug --stacktrace
       - name: Rename APK
-        run: cp autosub-v9/app/build/outputs/apk/debug/app-debug.apk AutoSub-V9-Local.apk
+        run: cp autosub-v9/app/build/outputs/apk/debug/app-debug.apk AutoSub-V11-Local.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: AutoSub-V9-Local
-          path: AutoSub-V9-Local.apk
+          name: AutoSub-V11-Local
+          path: AutoSub-V11-Local.apk
           compression-level: 0
-# latest-source trigger
