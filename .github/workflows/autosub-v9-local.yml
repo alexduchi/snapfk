@@ -1,0 +1,38 @@
+name: Build AutoSub V9 Local
+on:
+  push:
+    branches: [autosub-v9-local-full]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install Android native toolchain
+        run: yes | sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1" >/dev/null
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Fetch whisper.cpp and local model
+        working-directory: autosub-v9
+        run: |
+          mkdir -p app/src/main/cpp app/src/main/assets
+          git clone --depth 1 --branch v1.8.6 https://github.com/ggml-org/whisper.cpp.git app/src/main/cpp/whisper.cpp
+          curl -L --fail --retry 3 -o app/src/main/assets/ggml-tiny.bin https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin
+          test $(stat -c%s app/src/main/assets/ggml-tiny.bin) -gt 70000000
+      - name: Build APK
+        working-directory: autosub-v9
+        run: gradle :app:assembleDebug --stacktrace
+      - name: Rename APK
+        run: cp autosub-v9/app/build/outputs/apk/debug/app-debug.apk AutoSub-V9-Local.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AutoSub-V9-Local
+          path: AutoSub-V9-Local.apk
+          compression-level: 0
