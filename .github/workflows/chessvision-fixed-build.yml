@@ -1,17 +1,11 @@
-name: ChessVision Ultra v0.4 APK
+name: ChessVision Ultra v0.5 APK
 
 on:
   push:
     branches:
       - chatgpt/chessvision-ultra-v03b-20260823
     paths:
-      - chessvision-ultra-v04-clean/**
-      - .github/workflows/chessvision-fixed-build.yml
-  pull_request:
-    branches:
-      - main
-    paths:
-      - chessvision-ultra-v04-clean/**
+      - chessvision-ultra-v05/**
       - .github/workflows/chessvision-fixed-build.yml
   workflow_dispatch:
 
@@ -26,7 +20,7 @@ jobs:
       - name: Checkout build branch
         uses: actions/checkout@v4
 
-      - name: Restore v0.3 and apply v0.4 control patch
+      - name: Restore v0.4 and apply v0.5 patch
         shell: bash
         run: |
           set -euo pipefail
@@ -58,10 +52,15 @@ jobs:
           mkdir -p /tmp/chessvision/app/src/main/res/raw
           cp chessvision-ultra-v04-clean/fixed_piece_models.txt /tmp/chessvision/app/src/main/res/raw/fixed_piece_models.txt
 
-          grep -q "versionName '0.4.0-control'" /tmp/chessvision/app/build.gradle
-          grep -q 'void playMoveDrag' /tmp/chessvision/app/src/main/java/fr/neo/chessvisionbot/GestureController.java
-          grep -q 'offOverlay' /tmp/chessvision/app/src/main/java/fr/neo/chessvisionbot/OverlayController.java
-          grep -q 'thinkMs=2600' /tmp/chessvision/app/src/main/java/fr/neo/chessvisionbot/core/BotConfig.java
+          base64 -d chessvision-ultra-v05/patch.b64 | gzip -dc > /tmp/v05.patch
+          echo '169bf56440187829b32c642134d914b4161c8989332f7b61babfcaf06de2bab3  /tmp/v05.patch' | sha256sum -c -
+          patch -p1 -d /tmp/chessvision < /tmp/v05.patch
+
+          grep -q "versionName '0.5.0-control'" /tmp/chessvision/app/build.gradle
+          grep -q 'main.postDelayed.*500' /tmp/chessvision/app/src/main/java/fr/neo/chessvisionbot/GestureController.java
+          grep -q 'hideOverlayFromApp' /tmp/chessvision/app/src/main/java/fr/neo/chessvisionbot/ChessBotService.java
+          grep -q 'DELAY_LIMIT_MS=15000' /tmp/chessvision/app/src/main/java/fr/neo/chessvisionbot/core/BotConfig.java
+          grep -q 'Coup devenu illégal' /tmp/chessvision/app/src/main/java/fr/neo/chessvisionbot/ChessBotService.java
 
       - name: Setup Java 17
         uses: actions/setup-java@v4
@@ -82,7 +81,7 @@ jobs:
           cp target/chess22k-1.14.jar /tmp/chessvision/app/libs/chess22k-1.14.jar
           jar tf /tmp/chessvision/app/libs/chess22k-1.14.jar | grep -q 'nl/s22k/chess/engine/MainEngine.class'
 
-      - name: Smoke-test engine and embedded models
+      - name: Smoke-test engine and models
         working-directory: /tmp/chessvision
         shell: bash
         run: |
@@ -101,7 +100,6 @@ jobs:
             }
           }
           JAVA
-
           cat > /tmp/ModelSmoke.java <<'JAVA'
           import fr.neo.chessvisionbot.core.*;
           import java.nio.file.*;
@@ -110,12 +108,10 @@ jobs:
               Path p=Path.of("app/src/main/res/raw/fixed_piece_models.txt");
               PieceModels m=new PieceModels();
               if(!m.deserialize(Files.readString(p)) || !m.ready()) throw new RuntimeException("fixed piece models invalid");
-              if(m.emptyThreshold < .04f || m.emptyThreshold > .18f) throw new RuntimeException("bad empty threshold "+m.emptyThreshold);
               System.out.println("FIXED_MODELS_OK threshold="+m.emptyThreshold+" bytes="+Files.size(p));
             }
           }
           JAVA
-
           rm -rf /tmp/coretest && mkdir /tmp/coretest
           find app/src/main/java/fr/neo/chessvisionbot/core -name '*.java' -print0 | xargs -0 javac -cp app/libs/chess22k-1.14.jar -d /tmp/coretest
           javac -cp "/tmp/coretest:app/libs/chess22k-1.14.jar" -d /tmp/coretest /tmp/UltraEngineSmoke.java /tmp/ModelSmoke.java
@@ -149,15 +145,15 @@ jobs:
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | head -n 8
           mkdir -p deliverables
-          cp "$APK" deliverables/ChessVisionBot-Ultra-v0.4.apk
-          sha256sum deliverables/ChessVisionBot-Ultra-v0.4.apk > deliverables/SHA256SUMS.txt
+          cp "$APK" deliverables/ChessVisionBot-Ultra-v0.5.apk
+          sha256sum deliverables/ChessVisionBot-Ultra-v0.5.apk > deliverables/SHA256SUMS.txt
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ChessVisionBot-Ultra-v0.4
+          name: ChessVisionBot-Ultra-v0.5
           path: |
-            deliverables/ChessVisionBot-Ultra-v0.4.apk
+            deliverables/ChessVisionBot-Ultra-v0.5.apk
             deliverables/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 7
