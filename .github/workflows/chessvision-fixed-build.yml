@@ -1,15 +1,15 @@
-name: ChessVision Ultra v0.7 APK
+name: ChessVision Ultra v0.8 APK
 
 on:
   push:
     branches: [chatgpt/chessvision-ultra-v03b-20260823]
     paths:
-      - chessvision-ultra-v07/**
+      - chessvision-ultra-v08/**
       - .github/workflows/chessvision-fixed-build.yml
   pull_request:
     branches: [main]
     paths:
-      - chessvision-ultra-v07/**
+      - chessvision-ultra-v08/**
       - .github/workflows/chessvision-fixed-build.yml
   workflow_dispatch:
 
@@ -23,7 +23,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Restore v0.6 and apply v0.7 fixes
+      - name: Restore v0.7 and apply v0.8 fixes
         shell: bash
         run: |
           set -euo pipefail
@@ -49,36 +49,43 @@ jobs:
           s=s.replace('if(fixedModelsReady)overlay.setStatus("v0.6 ✓ • "+engine.backend()+" • START",true);','if(fixedModelsReady)overlay.setStatus("v0.7 ✓ • "+engine.backend()+" • START",true);')
           s=s.replace('''    private void scheduleCapture(long delay){\n        main.postDelayed(()->{if((running||forceScan)&&!capturing)captureOnce();},Math.max(20,delay));\n    }''','''    private void scheduleCapture(long delay){\n        long now=SystemClock.uptimeMillis();\n        long requested=now+Math.max(20,delay);\n        long earliest=lastCaptureRequestAt<=0?now:lastCaptureRequestAt+CAPTURE_MIN_INTERVAL_MS;\n        long when=Math.max(requested,earliest);\n        main.removeCallbacks(captureRunnable);\n        main.postDelayed(captureRunnable,Math.max(20,when-now));\n    }''')
           s=s.replace('''                        if(!isolated && overlay!=null)overlay.setCaptureHidden(false);\n                        capturing=false;\n                        if(software!=null){''','''                        if(!isolated && overlay!=null)overlay.setCaptureHidden(false);\n                        capturing=false;\n                        if(software!=null){\n                            captureFailureStreak=0;\n                            lastCaptureSuccessAt=SystemClock.uptimeMillis();''')
-          s=s.replace('''                    @Override public void onFailure(int errorCode){\n                        if(!isolated && overlay!=null)overlay.setCaptureHidden(false);\n                        capturing=false;setStatus("Capture refusée (code "+errorCode+")",false);scheduleCapture(850);\n                    }''','''                    @Override public void onFailure(int errorCode){\n                        if(!isolated && overlay!=null)overlay.setCaptureHidden(false);\n                        capturing=false;captureFailureStreak++;\n                        long now=SystemClock.uptimeMillis();\n                        if(errorCode==ERROR_TAKE_SCREENSHOT_INTERVAL_TIME_SHORT){scheduleCapture(CAPTURE_MIN_INTERVAL_MS+80);return;}\n                        if(captureFailureStreak>=3 && (lastCaptureSuccessAt==0L || now-lastCaptureSuccessAt>3500L))\n                            setStatus("Capture temporairement indisponible (code "+errorCode+") • nouvel essai…",false);\n                        scheduleCapture(Math.min(2400,900+captureFailureStreak*220L));\n                    }''')
+          s=s.replace('''                    @Override public void onFailure(int errorCode){\n                        if(!isolated && overlay!=null)overlay.setCaptureHidden(false);\n                        capturing=false;setStatus("Capture refusée (code "+errorCode+")",false);scheduleCapture(850);\n                    }''','''                    @Override public void onFailure(int errorCode){\n                        if(!isolated && overlay!=null)overlay.setCaptureHidden(false);\n                        capturing=false;captureFailureStreak++;\n                        long now=SystemClock.uptimeMillis();\n                        if(errorCode==ERROR_TAKE_SCREENSHOT_INTERVAL_TIME_SHORT){scheduleCapture(CAPTURE_MIN_INTERVAL_MS+80);return;}\n                        if(captureFailureStreak>=3 && (lastCaptureSuccessAt==0L || now-lastCaptureSuccessAt>3500L)) setStatus("Capture temporairement indisponible (code "+errorCode+") • nouvel essai…",false);\n                        scheduleCapture(Math.min(2400,900+captureFailureStreak*220L));\n                    }''')
           s=s.replace('''                if(isolated)takeScreenshotOfWindow(target.windowId,getMainExecutor(),cb);\n                else takeScreenshot(Display.DEFAULT_DISPLAY,getMainExecutor(),cb);''','''                lastCaptureRequestAt=SystemClock.uptimeMillis();\n                if(isolated)takeScreenshotOfWindow(target.windowId,getMainExecutor(),cb);\n                else takeScreenshot(Display.DEFAULT_DISPLAY,getMainExecutor(),cb);''')
-          s=s.replace('''            }catch(Throwable t){\n                if(!isolated && overlay!=null)overlay.setCaptureHidden(false);\n                capturing=false;setStatus("Capture indisponible: "+t.getClass().getSimpleName(),false);scheduleCapture(850);\n            }''','''            }catch(Throwable t){\n                if(!isolated && overlay!=null)overlay.setCaptureHidden(false);\n                capturing=false;captureFailureStreak++;\n                long now=SystemClock.uptimeMillis();\n                if(captureFailureStreak>=3 && (lastCaptureSuccessAt==0L || now-lastCaptureSuccessAt>3500L))\n                    setStatus("Capture temporairement indisponible • "+t.getClass().getSimpleName(),false);\n                scheduleCapture(Math.min(2400,900+captureFailureStreak*220L));\n            }''')
-          s=s.replace('''            if(found!=null && found.confidence>=.35){\n                boardRect=found;boardDetectMisses=0;\n            }else{\n                boardDetectMisses++;\n                if(boardDetectMisses>=2)boardRect=null;\n            }''','''            if(found!=null && found.confidence>=.28){\n                boardRect=found;boardDetectMisses=0;\n            }else{\n                BoardRect previous=boardRect;\n                boolean previousStillValid=previous!=null\n                        && previous.left>=0 && previous.top>=0\n                        && previous.left+previous.size<=frame.width\n                        && previous.top+previous.size<=frame.height\n                        && FixedTheme.colorDistance(frame,previous)<=28.0;\n                boardDetectMisses++;\n                if(!previousStillValid || boardDetectMisses>=6)boardRect=null;\n            }''')
+          s=s.replace('''            }catch(Throwable t){\n                if(!isolated && overlay!=null)overlay.setCaptureHidden(false);\n                capturing=false;setStatus("Capture indisponible: "+t.getClass().getSimpleName(),false);scheduleCapture(850);\n            }''','''            }catch(Throwable t){\n                if(!isolated && overlay!=null)overlay.setCaptureHidden(false);\n                capturing=false;captureFailureStreak++;\n                long now=SystemClock.uptimeMillis();\n                if(captureFailureStreak>=3 && (lastCaptureSuccessAt==0L || now-lastCaptureSuccessAt>3500L)) setStatus("Capture temporairement indisponible • "+t.getClass().getSimpleName(),false);\n                scheduleCapture(Math.min(2400,900+captureFailureStreak*220L));\n            }''')
+          s=s.replace('''            if(found!=null && found.confidence>=.35){\n                boardRect=found;boardDetectMisses=0;\n            }else{\n                boardDetectMisses++;\n                if(boardDetectMisses>=2)boardRect=null;\n            }''','''            if(found!=null && found.confidence>=.28){\n                boardRect=found;boardDetectMisses=0;\n            }else{\n                BoardRect previous=boardRect;\n                boolean previousStillValid=previous!=null && previous.left>=0 && previous.top>=0 && previous.left+previous.size<=frame.width && previous.top+previous.size<=frame.height && FixedTheme.colorDistance(frame,previous)<=28.0;\n                boardDetectMisses++;\n                if(!previousStillValid || boardDetectMisses>=6)boardRect=null;\n            }''')
           s=s.replace('setStatus("Plateau vert/crème non détecté",false);scheduleCapture(650);','setStatus("Plateau perdu • recherche automatique…",false);scheduleCapture(900);')
           p.write_text(s)
           p=root/'app/src/main/java/fr/neo/chessvisionbot/MainActivity.java'; s=p.read_text().replace('V0.6 DYNAMIC GRID','V0.7 STABLE VISION'); p.write_text(s)
           PY
 
-          grep -q "versionName '0.7.0-stable-vision'" /tmp/chessvision/app/build.gradle
-          grep -q 'CAPTURE_MIN_INTERVAL_MS=1100L' /tmp/chessvision/app/src/main/java/fr/neo/chessvisionbot/ChessBotService.java
-          grep -q 'BAND_THRESHOLD = 0.20' /tmp/chessvision/app/src/main/java/fr/neo/chessvisionbot/core/FixedBoardDetector.java
+          base64 -d chessvision-ultra-v08/patch.b64 | gzip -dc > /tmp/v08.patch
+          echo '70b44fd2e2f702e64b4009825a0dc9451dce2dca68eac06769805c9c300050a5  /tmp/v08.patch' | sha256sum -c -
+          patch -p1 -d /tmp/chessvision < /tmp/v08.patch
+          grep -q "versionName '0.8.0-promotion-confirm'" /tmp/chessvision/app/build.gradle
+          grep -q 'class MoveConfirmationAnalyzer' /tmp/chessvision/app/src/main/java/fr/neo/chessvisionbot/core/MoveConfirmationAnalyzer.java
+          grep -q 'choosePromotion' /tmp/chessvision/app/src/main/java/fr/neo/chessvisionbot/GestureController.java
 
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
+
       - name: Chess22k
         run: |
           git clone --depth 1 https://github.com/sandermvdb/chess22k.git /tmp/chess22k
           cd /tmp/chess22k && mvn -q -DskipTests package
           mkdir -p /tmp/chessvision/app/libs
           cp target/chess22k-1.14.jar /tmp/chessvision/app/libs/chess22k-1.14.jar
+
       - name: Core tests
         working-directory: /tmp/chessvision
         run: |
           rm -rf /tmp/coretest && mkdir /tmp/coretest
           find app/src/main/java/fr/neo/chessvisionbot/core -name '*.java' -print0 | xargs -0 javac -cp app/libs/chess22k-1.14.jar -d /tmp/coretest
-          javac -cp "/tmp/coretest:app/libs/chess22k-1.14.jar" -d /tmp/coretest core-test/ScreenMapperTest.java
+          javac -cp "/tmp/coretest:app/libs/chess22k-1.14.jar" -d /tmp/coretest core-test/ScreenMapperTest.java core-test/MoveConfirmationTest.java
           java -cp "/tmp/coretest:app/libs/chess22k-1.14.jar" ScreenMapperTest
+          java -cp "/tmp/coretest:app/libs/chess22k-1.14.jar" MoveConfirmationTest
+
       - uses: android-actions/setup-android@v3
       - run: |
           yes | sdkmanager --licenses >/dev/null || true
@@ -86,18 +93,21 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+
       - name: Build APK
         working-directory: /tmp/chessvision
         run: gradle --no-daemon :app:assembleDebug
+
       - name: Verify and collect
         run: |
           APK=/tmp/chessvision/app/build/outputs/apk/debug/app-debug.apk
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
           mkdir -p deliverables
-          cp "$APK" deliverables/ChessVisionBot-Ultra-v0.7.apk
-          sha256sum deliverables/ChessVisionBot-Ultra-v0.7.apk > deliverables/SHA256SUMS.txt
+          cp "$APK" deliverables/ChessVisionBot-Ultra-v0.8.apk
+          sha256sum deliverables/ChessVisionBot-Ultra-v0.8.apk > deliverables/SHA256SUMS.txt
+
       - uses: actions/upload-artifact@v4
         with:
-          name: ChessVisionBot-Ultra-v0.7
+          name: ChessVisionBot-Ultra-v0.8
           path: deliverables/
           retention-days: 7
