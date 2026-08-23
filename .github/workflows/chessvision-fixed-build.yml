@@ -7,6 +7,12 @@ on:
     paths:
       - chessvision-fixed-build/payload/**
       - .github/workflows/chessvision-fixed-build.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - chessvision-fixed-build/payload/**
+      - .github/workflows/chessvision-fixed-build.yml
   workflow_dispatch:
 
 permissions:
