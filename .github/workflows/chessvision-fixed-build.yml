@@ -54,23 +54,10 @@ jobs:
           awk '/^diff --git a\/app\/src\/main\/java\/fr\/neo\/chessvisionbot\/core\/UltraChessEngine.java/{exit} {print}' /tmp/v04.patch > /tmp/v04-main.patch
           patch -p1 -d /tmp/chessvision < /tmp/v04-main.patch
 
-          python3 - <<'PY'
-          from pathlib import Path
-          import re
-          p=Path('/tmp/chessvision/app/src/main/java/fr/neo/chessvisionbot/core/UltraChessEngine.java')
-          s=p.read_text()
-          s,n1=re.subn(r'int\s+threads\s*=\s*1\s*;', 'int threads=2;', s, count=1)
-          s,n2=re.subn(r'ttSetSize\.invoke\(null,\s*32\s*\)', 'ttSetSize.invoke(null,64)', s, count=1)
-          if n1 != 1 or n2 != 1:
-              raise SystemExit(f'engine tuning patch failed: threads={n1} tt={n2}')
-          p.write_text(s)
-          PY
-
           grep -q "versionName '0.4.0-control'" /tmp/chessvision/app/build.gradle
           grep -q 'void playMoveDrag' /tmp/chessvision/app/src/main/java/fr/neo/chessvisionbot/GestureController.java
           grep -q 'offOverlay' /tmp/chessvision/app/src/main/java/fr/neo/chessvisionbot/OverlayController.java
-          grep -q 'int threads=2;' /tmp/chessvision/app/src/main/java/fr/neo/chessvisionbot/core/UltraChessEngine.java
-          grep -q 'ttSetSize.invoke(null,64)' /tmp/chessvision/app/src/main/java/fr/neo/chessvisionbot/core/UltraChessEngine.java
+          grep -q 'thinkMs=2600' /tmp/chessvision/app/src/main/java/fr/neo/chessvisionbot/core/BotConfig.java
 
       - name: Setup Java 17
         uses: actions/setup-java@v4
