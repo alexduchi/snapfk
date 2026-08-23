@@ -1,0 +1,59 @@
+th.abs(dx)+Math.abs(dy)>dp(8))drag[0]=true;bubbleLp.x=Math.max(0,startXY[0]-(int)dx);bubbleLp.y=Math.max(0,startXY[1]+(int)dy);try{wm.updateViewLayout(bubble,bubbleLp);}catch(Exception ignored){}return true;case MotionEvent.ACTION_UP:if(!drag[0])togglePanel();return true;}return false;});
+-
+-        panel=new LinearLayout(service);panel.setOrientation(LinearLayout.VERTICAL);panel.setPadding(dp(12),dp(12),dp(12),dp(12));panel.setBackground(bg(Color.rgb(9,23,32),18));
+-        TextView head=new TextView(service);head.setText("CHESS VISION BOT • ULTRA v0.3");head.setTextColor(Color.rgb(50,215,166));head.setTextSize(12);head.setTypeface(android.graphics.Typeface.DEFAULT,1);panel.addView(head);
+-        status=new TextView(service);status.setText("Prêt");status.setTextColor(Color.WHITE);status.setTextSize(13);status.setMaxLines(4);status.setPadding(0,dp(7),0,dp(8));panel.addView(status);
+-        LinearLayout row1=new LinearLayout(service);start=item("START");TextView fresh=item("NOUVELLE");row1.addView(start);row1.addView(fresh);panel.addView(row1);start.setOnClickListener(v->actions.toggleRunning());fresh.setOnClickListener(v->actions.newGame());
+-        LinearLayout row2=new LinearLayout(service);side=item("MOI: BLANC");orientation=item("BAS: BLANC");row2.addView(side);row2.addView(orientation);panel.addView(row2);side.setOnClickListener(v->actions.cycleSide());orientation.setOnClickListener(v->actions.cycleOrientation());
+-        LinearLayout row3=new LinearLayout(service);delay=item("1.6–4.3 s");TextView scan=item("RESCAN");row3.addView(delay);row3.addView(scan);panel.addView(row3);delay.setOnClickListener(v->actions.cycleDelay());scan.setOnClickListener(v->actions.rescan());
+-        panelLp=new WindowManager.LayoutParams(dp(300),WindowManager.LayoutParams.WRAP_CONTENT,WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE|WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,PixelFormat.TRANSLUCENT);panelLp.gravity=Gravity.TOP|Gravity.END;panelLp.x=dp(8);panelLp.y=dp(174);panel.setVisibility(View.GONE);wm.addView(panel,panelLp);
+-
+-        debug=new DebugView(service);debugLp=new WindowManager.LayoutParams(-1,-1,WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE|WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE|WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,PixelFormat.TRANSLUCENT);debug.setVisibility(View.GONE);wm.addView(debug,debugLp);
+-    }
+-    void show(){if(bubble!=null)bubble.setVisibility(View.VISIBLE);}
+-    void togglePanel(){panelVisible=!panelVisible;panel.setVisibility(panelVisible?View.VISIBLE:View.GONE);}
+-    void setStatus(String s,boolean good){if(status!=null){status.setText(s);status.setTextColor(good?Color.rgb(188,239,222):Color.rgb(255,184,119));}if(bubble!=null)bubble.setBackground(bg(good?Color.rgb(50,215,166):Color.rgb(255,172,78),18));}
++        bubble=new TextView(service);bubble.setText("CV");bubble.setTextColor(Color.rgb(5,18,24));bubble.setTextSize(14);
++        bubble.setTypeface(android.graphics.Typeface.DEFAULT,1);bubble.setGravity(Gravity.CENTER);bubble.setBackground(bg(Color.rgb(50,215,166),16));
++        bubbleLp=new WindowManager.LayoutParams(dp(50),dp(50),WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
++                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE|WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,PixelFormat.TRANSLUCENT);
++        bubbleLp.gravity=Gravity.TOP|Gravity.END;bubbleLp.x=dp(7);bubbleLp.y=dp(108);wm.addView(bubble,bubbleLp);
++
++        final float[]down={0,0};final int[]startXY={0,0};final boolean[]drag={false};
++        bubble.setOnTouchListener((v,e)->{switch(e.getActionMasked()){
++            case MotionEvent.ACTION_DOWN:
++                down[0]=e.getRawX();down[1]=e.getRawY();startXY[0]=bubbleLp.x;startXY[1]=bubbleLp.y;drag[0]=false;return true;
++            case MotionEvent.ACTION_MOVE:
++                float dx=e.getRawX()-down[0],dy=e.getRawY()-down[1];if(Math.abs(dx)+Math.abs(dy)>dp(7))drag[0]=true;
++                bubbleLp.x=Math.max(0,startXY[0]-(int)dx);bubbleLp.y=Math.max(0,startXY[1]+(int)dy);
++                try{wm.updateViewLayout(bubble,bubbleLp);syncPanelPosition();}catch(Exception ignored){}return true;
++            case MotionEvent.ACTION_UP:if(!drag[0])togglePanel();return true;
++        }return false;});
++
++        row=new LinearLayout(service);row.setOrientation(LinearLayout.HORIZONTAL);row.setGravity(Gravity.CENTER_VERTICAL);
++        row.setPadding(dp(5),dp(2),dp(5),dp(2));row.setBackground(bg(Color.rgb(9,23,32),16));
++
++        status=item("PRÊT",104);status.setTextSize(10);status.setMaxLines(2);row.addView(status);
++        start=item("START",54);row.addView(start);start.setOnClickListener(v->actions.toggleRunning());
++        TextView fresh=item("NEW",48);row.addView(fresh);fresh.setOnClickListener(v->actions.newGame());
++        side=item("W",38);row.addView(side);side.setOnClickListener(v->actions.cycleSide());
++        orientation=item("↻",38);orientation.setTextSize(17);row.addView(orientation);orientation.setOnClickListener(v->actions.cycleOrientation());
++        delay=item("D",42);row.addView(delay);delay.setOnClickListener(v->actions.cycleDelay());
++        TextView scan=item("SCAN",52);row.addView(scan);scan.setOnClickListener(v->actions.rescan());
++        TextView off=item("OFF",48);off.setBackground(bg(Color.rgb(112,38,45),11));row.addView(off);off.setOnClickListener(v->actions.offOverlay());
++
++        panel=new HorizontalScrollView(service);panel.setHorizontalScrollBarEnabled(false);panel.setFillViewport(false);panel.addView(row,
++                new HorizontalScrollView.LayoutParams(WindowManager.LayoutParams.WRAP_CONTENT,dp(50)));
++        int screen=service.getResources().getDisplayMetrics().widthPixels;
++        int width=Math.max(dp(250),Math.min(dp(350),screen-dp(72)));
++        panelLp=new WindowManager.LayoutParams(width,dp(50),WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
++                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE|WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,PixelFormat.TRANSLUCENT);
++        panelLp.gravity=Gravity.TOP|Gravity.END;panelLp.x=bubbleLp.x+dp(57);panelLp.y=bubbleLp.y;
++        panel.setVisibility(View.GONE);wm.addView(panel,panelLp);
++
++        debug=new DebugView(service);debugLp=new WindowManager.LayoutParams(-1,-1,WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
++                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE|WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE|WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
++                PixelFormat.TRANSLUCENT);debug.setVisibility(View.GONE);wm.addView(debug,debugLp);
++    }
++
++    private void syncPanelPosition(){if(panelLp==null)return;panelLp.x=b
