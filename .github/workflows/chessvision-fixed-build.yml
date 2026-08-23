@@ -60,7 +60,8 @@ jobs:
 
           base64 -d chessvision-ultra-v08/patch.b64 | gzip -dc > /tmp/v08.patch
           echo '70b44fd2e2f702e64b4009825a0dc9451dce2dca68eac06769805c9c300050a5  /tmp/v08.patch' | sha256sum -c -
-          patch -p1 -d /tmp/chessvision < /tmp/v08.patch
+          awk '/^diff -ruN .* \.\/app\/build.gradle /{p=1} p' /tmp/v08.patch > /tmp/v08-code.patch
+          patch --batch -p1 -d /tmp/chessvision < /tmp/v08-code.patch
           grep -q "versionName '0.8.0-promotion-confirm'" /tmp/chessvision/app/build.gradle
           grep -q 'class MoveConfirmationAnalyzer' /tmp/chessvision/app/src/main/java/fr/neo/chessvisionbot/core/MoveConfirmationAnalyzer.java
           grep -q 'choosePromotion' /tmp/chessvision/app/src/main/java/fr/neo/chessvisionbot/GestureController.java
