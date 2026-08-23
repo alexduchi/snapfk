@@ -1,0 +1,63 @@
+MainActivity.java
+index 6b5ba9f..150b3e5 100644
+--- a/app/src/main/java/fr/neo/chessvisionbot/MainActivity.java
++++ b/app/src/main/java/fr/neo/chessvisionbot/MainActivity.java
+@@ -23,7 +23,7 @@ public final class MainActivity extends Activity {
+         LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);pad(root,20,24);scroll.addView(root,new ScrollView.LayoutParams(-1,-2));
+         TextView tag=text("FIXED THEME • VISION • RULES • ACCESSIBILITY",11,Color.rgb(50,215,166),true);tag.setLetterSpacing(.10f);root.addView(tag);
+         TextView title=text("Chess Vision Bot",31,Color.WHITE,true);title.setPadding(0,dp(7),0,0);root.addView(title);
+-        TextView sub=text("V0.2 FIXED — cette version accepte uniquement le plateau vert/crème et les pièces de référence fournis.",15,Color.rgb(166,183,192),false);sub.setLineSpacing(0,1.18f);sub.setPadding(0,dp(8),0,dp(14));root.addView(sub);
++        TextView sub=text("V0.4 CONTROL — plateau fixe, gestes tap→tap avec secours drag, barre horizontale et moteur renforcé.",15,Color.rgb(166,183,192),false);sub.setLineSpacing(0,1.18f);sub.setPadding(0,dp(8),0,dp(14));root.addView(sub);
+ 
+         LinearLayout palette=new LinearLayout(this);palette.setOrientation(LinearLayout.HORIZONTAL);palette.setPadding(dp(8),dp(8),dp(8),dp(8));palette.setBackground(bg(Color.rgb(15,29,39),18));
+         TextView light=text("  CRÈME  ",14,Color.rgb(20,30,30),true);light.setGravity(Gravity.CENTER);light.setBackground(bg(Color.rgb(238,238,210),10));
+@@ -33,7 +33,7 @@ public final class MainActivity extends Activity {
+ 
+         LinearLayout card=new LinearLayout(this);card.setOrientation(LinearLayout.VERTICAL);pad(card,16,16);card.setBackground(bg(Color.rgb(15,29,39),18));root.addView(card,new LinearLayout.LayoutParams(-1,-2));
+         serviceState=text("Service d’accessibilité : …",16,Color.WHITE,true);card.addView(serviceState);
+-        TextView expl=text("Le service capture uniquement l’écran visible pour lire l’échiquier et utilise les gestes Android pour toucher la case de départ puis la case d’arrivée.",13,Color.rgb(158,177,187),false);expl.setPadding(0,dp(8),0,0);card.addView(expl);
++        TextView expl=text("Le service lit l’échiquier puis tente deux taps Android séparés. Si le jeu ne réagit pas, il réessaie automatiquement en glisser-déposer.",13,Color.rgb(158,177,187),false);expl.setPadding(0,dp(8),0,0);card.addView(expl);
+         Button settings=button("Ouvrir les réglages d’accessibilité");settings.setOnClickListener(v->{try{startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));}catch(Exception ignored){}});card.addView(settings);
+         Button overlay=button("Afficher la bulle CV");overlay.setOnClickListener(v->{ChessBotService s=ChessBotService.get();if(s!=null)s.showOverlay();else Toast.makeText(this,"Active d’abord Chess Vision Bot dans Accessibilité.",Toast.LENGTH_LONG).show();});card.addView(overlay);
+ 
+diff --git a/app/src/main/java/fr/neo/chessvisionbot/OverlayController.java b/app/src/main/java/fr/neo/chessvisionbot/OverlayController.java
+index e89934a..0d9952f 100644
+--- a/app/src/main/java/fr/neo/chessvisionbot/OverlayController.java
++++ b/app/src/main/java/fr/neo/chessvisionbot/OverlayController.java
+@@ -7,37 +7,120 @@ import android.view.*;
+ import android.widget.*;
+ import fr.neo.chessvisionbot.core.*;
+ 
++/** v0.4: compact horizontal tray + true overlay OFF button. */
+ final class OverlayController {
+-    interface Actions {void toggleRunning();void newGame();void rescan();void cycleSide();void cycleOrientation();void cycleDelay();}
++    interface Actions {
++        void toggleRunning();void newGame();void rescan();void cycleSide();
++        void cycleOrientation();void cycleDelay();void offOverlay();
++    }
++
+     private final ChessBotService service;private final WindowManager wm;private final Actions actions;
+-    private TextView bubble,status,start,side,orientation,delay;private LinearLayout panel;private DebugView debug;
+-    private WindowManager.LayoutParams bubbleLp,panelLp,debugLp;private boolean panelVisible=false,captureHidden=false,debugWanted=false;
++    private TextView bubble,status,start,side,orientation,delay;
++    private HorizontalScrollView panel;private LinearLayout row;private DebugView debug;
++    private WindowManager.LayoutParams bubbleLp,panelLp,debugLp;
++    private boolean panelVisible=false,captureHidden=false,debugWanted=false,overlayVisible=true;
++
+     private int dp(float n){return (int)(n*service.getResources().getDisplayMetrics().density+.5f);}
+     private GradientDrawable bg(int color,float radius){GradientDrawable g=new GradientDrawable();g.setColor(color);g.setCornerRadius(dp(radius));return g;}
++
+     OverlayController(ChessBotService s,Actions a){service=s;actions=a;wm=(WindowManager)s.getSystemService(Context.WINDOW_SERVICE);create();}
+-    private TextView item(String txt){TextView v=new TextView(service);v.setText(txt);v.setTextSize(13);v.setTextColor(Color.WHITE);v.setGravity(Gravity.CENTER);v.setPadding(dp(10),dp(10),dp(10),dp(10));v.setBackground(bg(Color.rgb(27,47,58),12));LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,dp(46),1);p.setMargins(dp(3),dp(3),dp(3),dp(3));v.setLayoutParams(p);return v;}
++
++    private TextView item(String txt,int width){
++        TextView v=new TextView(service);v.setText(txt);v.setTextSize(11);v.setTextColor(Color.WHITE);
++        v.setTypeface(android.graphics.Typeface.DEFAULT,1);v.setGravity(Gravity.CENTER);
++        v.setPadding(dp(7),0,dp(7),0);v.setBackground(bg(Color.rgb(27,47,58),11));
++        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(dp(width),dp(42));p.setMargins(dp(2),dp(3),dp(2),dp(3));v.setLayoutParams(p);return v;
++    }
++
+     private void create(){
+-        bubble=new TextView(service);bubble.setText("CV");bubble.setTextColor(Color.rgb(5,18,24));bubble.setTextSize(15);bubble.setTypeface(android.graphics.Typeface.DEFAULT,1);bubble.setGravity(Gravity.CENTER);bubble.setBackground(bg(Color.rgb(50,215,166),18));
+-        bubbleLp=new WindowManager.LayoutParams(dp(56),dp(56),WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE|WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,PixelFormat.TRANSLUCENT);bubbleLp.gravity=Gravity.TOP|Gravity.END;bubbleLp.x=dp(8);bubbleLp.y=dp(110);wm.addView(bubble,bubbleLp);
+-        final float[]down={0,0};final int[]startXY={0,0};final boolean[]drag={false};bubble.setOnTouchListener((v,e)->{switch(e.getActionMasked()){case MotionEvent.ACTION_DOWN:down[0]=e.getRawX();down[1]=e.getRawY();startXY[0]=bubbleLp.x;startXY[1]=bubbleLp.y;drag[0]=false;return true;case MotionEvent.ACTION_MOVE:float dx=e.getRawX()-down[0],dy=e.getRawY()-down[1];if(Ma

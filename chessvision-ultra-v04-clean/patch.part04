@@ -1,0 +1,86 @@
+ubbleLp.x+dp(57);panelLp.y=bubbleLp.y;try{wm.updateViewLayout(panel,panelLp);}catch(Exception ignored){}}
++
++    void show(){
++        overlayVisible=true;panelVisible=false;
++        if(bubble!=null)bubble.setVisibility(View.VISIBLE);
++        if(panel!=null)panel.setVisibility(View.GONE);
++    }
++
++    void hideAll(){
++        overlayVisible=false;panelVisible=false;
++        if(bubble!=null)bubble.setVisibility(View.GONE);
++        if(panel!=null)panel.setVisibility(View.GONE);
++        if(debug!=null)debug.setVisibility(View.GONE);
++    }
++
++    void togglePanel(){
++        if(!overlayVisible)return;
++        panelVisible=!panelVisible;
++        if(panelVisible){
++            syncPanelPosition();panel.setVisibility(View.VISIBLE);panel.setAlpha(0f);panel.setTranslationX(dp(34));
++            panel.animate().alpha(1f).translationX(0).setDuration(165).start();
++        }else{
++            panel.animate().alpha(0f).translationX(dp(34)).setDuration(130).withEndAction(()->{if(!panelVisible)panel.setVisibility(View.GONE);}).start();
++        }
++    }
++
++    void setStatus(String s,boolean good){
++        String compact=s==null?"":s.replace("Chess22k 1.14","C22K");
++        if(compact.length()>34)compact=compact.substring(0,34)+"…";
++        if(status!=null){status.setText(compact);status.setTextColor(good?Color.rgb(188,239,222):Color.rgb(255,184,119));}
++        if(bubble!=null)bubble.setBackground(bg(good?Color.rgb(50,215,166):Color.rgb(255,172,78),16));
++    }
+     void setRunning(boolean running){if(start!=null)start.setText(running?"PAUSE":"START");}
+-    void setConfig(BotConfig c){if(side!=null)side.setText(c.botWhite?"MOI: BLANC":"MOI: NOIR");if(orientation!=null)orientation.setText(c.whiteBottom?"BAS: BLANC":"BAS: NOIR");if(delay!=null)delay.setText(String.format(java.util.Locale.US,"%.1f–%.1f s",c.delayMinMs/1000f,c.delayMaxMs/1000f));}
+-    void setBoard(BoardRect r,boolean show){debugWanted=show&&r!=null;if(debug!=null){debug.rect=r;debug.setVisibility(debugWanted&&!captureHidden?View.VISIBLE:View.GONE);debug.invalidate();}}
+-    void setCaptureHidden(boolean hide){captureHidden=hide;if(bubble!=null)bubble.setVisibility(hide?View.INVISIBLE:View.VISIBLE);if(panel!=null)panel.setVisibility(hide?View.INVISIBLE:(panelVisible?View.VISIBLE:View.GONE));if(debug!=null)debug.setVisibility(hide?View.INVISIBLE:(debugWanted?View.VISIBLE:View.GONE));}
++    void setConfig(BotConfig c){
++        if(side!=null)side.setText(c.botWhite?"W":"B");
++        if(orientation!=null)orientation.setText(c.whiteBottom?"↻W":"↻B");
++        if(delay!=null)delay.setText(String.format(java.util.Locale.US,"%.1f",c.delayMinMs/1000f));
++    }
++    void setBoard(BoardRect r,boolean show){debugWanted=show&&r!=null;if(debug!=null){debug.rect=r;debug.setVisibility(debugWanted&&!captureHidden&&overlayVisible?View.VISIBLE:View.GONE);debug.invalidate();}}
++    void setCaptureHidden(boolean hide){
++        captureHidden=hide;
++        if(bubble!=null)bubble.setVisibility(hide||!overlayVisible?View.INVISIBLE:View.VISIBLE);
++        if(panel!=null)panel.setVisibility(hide||!overlayVisible?View.INVISIBLE:(panelVisible?View.VISIBLE:View.GONE));
++        if(debug!=null)debug.setVisibility(hide||!overlayVisible?View.INVISIBLE:(debugWanted?View.VISIBLE:View.GONE));
++    }
+     void destroy(){try{wm.removeView(bubble);}catch(Exception ignored){}try{wm.removeView(panel);}catch(Exception ignored){}try{wm.removeView(debug);}catch(Exception ignored){}}
+ 
+     private static final class DebugView extends View{
+diff --git a/app/src/main/java/fr/neo/chessvisionbot/core/BotConfig.java b/app/src/main/java/fr/neo/chessvisionbot/core/BotConfig.java
+index 375fc6c..47ce418 100644
+--- a/app/src/main/java/fr/neo/chessvisionbot/core/BotConfig.java
++++ b/app/src/main/java/fr/neo/chessvisionbot/core/BotConfig.java
+@@ -7,7 +7,7 @@ public final class BotConfig {
+     public boolean whiteBottom=true;
+     public int delayMinMs=1600;
+     public int delayMaxMs=4300;
+-    public long thinkMs=1400;
++    public long thinkMs=2600;
+     public boolean debugGrid=false;
+     public int randomDelay(Random r){int a=Math.min(delayMinMs,delayMaxMs),b=Math.max(delayMinMs,delayMaxMs);return a+(b<=a?0:r.nextInt(b-a+1));}
+ }
+diff --git a/app/src/main/java/fr/neo/chessvisionbot/core/UltraChessEngine.java b/app/src/main/java/fr/neo/chessvisionbot/core/UltraChessEngine.java
+index d83d346..979cf48 100644
+--- a/app/src/main/java/fr/neo/chessvisionbot/core/UltraChessEngine.java
++++ b/app/src/main/java/fr/neo/chessvisionbot/core/UltraChessEngine.java
+@@ -42,7 +42,7 @@ public final class UltraChessEngine {
+             // enough for a phone. Chess22k handles its own SMP worker pool.
+             try{
+                 Method setThreads=uciOptions.getMethod("setThreadCount",int.class);
+-                int threads=1;
++                int threads=2;
+                 setThreads.invoke(null,threads);
+             }catch(Throwable ignored){}
+ 
+@@ -59,7 +59,7 @@ public final class UltraChessEngine {
+ 
+             board=getBoard.invoke(null,0);
+             threadData=getThreadData.invoke(null,0);
+-            if(ttSetSize!=null)ttSetSize.invoke(null,32);
++            if(ttSetSize!=null)ttSetSize.invoke(null,64);
+             ttInit.invoke(null,true);
+             try{
+                 Class<?> uo=Class.forName("nl.s22k.chess.engine.UciOut");

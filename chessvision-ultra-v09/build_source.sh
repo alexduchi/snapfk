@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cat chessvision-fixed-build/payload/source.part00 chessvision-fixed-build/payload/source.part01 chessvision-fixed-build/payload/source.part02 chessvision-fixed-build/payload/source.part03 chessvision-fixed-build/payload/source.part04 chessvision-fixed-build/payload/source.part05 | tr -d '\r\n' | base64 -d > /tmp/chessvision.zip
+rm -rf /tmp/chessvision && mkdir /tmp/chessvision && unzip -q /tmp/chessvision.zip -d /tmp/chessvision
+base64 -d chessvision-ultra-v03/patch.b64 | gzip -dc > /tmp/v03.patch && patch -p1 -d /tmp/chessvision < /tmp/v03.patch
+cat chessvision-ultra-v04-clean/patch.part00 chessvision-ultra-v04-clean/patch.part01 chessvision-ultra-v04-clean/patch.part02 chessvision-ultra-v04-clean/patch.part03 chessvision-ultra-v04-clean/patch.part04 > /tmp/v04.patch
+awk '/^diff --git a\/app\/src\/main\/java\/fr\/neo\/chessvisionbot\/core\/UltraChessEngine.java/{exit} {print}' /tmp/v04.patch > /tmp/v04-main.patch
+patch -p1 -d /tmp/chessvision < /tmp/v04-main.patch
+mkdir -p /tmp/chessvision/app/src/main/res/raw
+cp chessvision-ultra-v04-clean/fixed_piece_models.txt /tmp/chessvision/app/src/main/res/raw/fixed_piece_models.txt
+base64 -d chessvision-ultra-v05/patch.b64 | gzip -dc > /tmp/v05.patch && patch -p1 -d /tmp/chessvision < /tmp/v05.patch
+base64 -d chessvision-ultra-v06/patch.b64 | gzip -dc > /tmp/v06.patch
+patch --batch -p1 -d /tmp/chessvision < /tmp/v06.patch || true
+python3 - <<'PY'
+from pathlib import Path
+root=Path('/tmp/chessvision')
+p=root/'app/build.gradle'; s=p.read_text(); s=s.replace('versionCode 6','versionCode 7').replace("versionName '0.6.0-dynamic-grid'","versionName '0.7.0-stable-vision'"); p.write_text(s)
+p=root/'app/src/main/java/fr/neo/chessvisionbot/core/FixedBoardDetector.java'; s=p.read_text(); s=s.replace('private static final double BAND_THRESHOLD = 0.38;','private static final double BAND_THRESHOLD = 0.20;'); p.write_text(s)
+p=root/'app/src/main/java/fr/neo/chessvisionbot/ChessBotService.java'; s=p.read_text()
+s=s.replace('private volatile boolean running=false,capturing=false,forceScan=true,thinking=false,movePending=false;', '''private volatile boolean running=false,capturing=false,forceScan=true,thinking=false,movePending=false;\n    private static final long CAPTURE_MIN_INTERVAL_MS=1100L;\n    private volatile long lastCaptureRequestAt=0L,lastCaptureSuccessAt=0L;\n    private volatile int captureFailureStreak=0;\n    private final Runnable captureRunnable=()->{if((running||forceScan)&&!capturing)captureOnce();};''')
+s=s.replace('if(fixedModelsReady)overlay.setStatus("v0.6 ✓ • "+engine.backend()+" • START",true);','if(fixedModelsReady)overlay.setStatus("v0.7 ✓ • "+engine.backend()+" • START",true);')
+s=s.replace('''    private void scheduleCapture(long delay){\n        main.postDelayed(()->{if((running||forceScan)&&!capturing)captureOnce();},Math.max(20,delay));\n    }''','''    private void scheduleCapture(long delay){\n        long now=SystemClock.uptimeMillis();\n        long requested=now+Math.max(20,delay);\n        long earliest=lastCaptureRequestAt<=0?now:lastCaptureRequestAt+CAPTURE_MIN_INTERVAL_MS;\n        long when=Math.max(requested,earliest);\n        main.removeCallbacks(captureRunnable);\n        main.postDelayed(captureRunnable,Math.max(20,when-now));\n    }''')
+s=s.replace('''                        if(!isolated && overlay!=null)overlay.setCaptureHidden(false);\n                        capturing=false;\n                        if(software!=null){''','''                        if(!isolated && overlay!=null)overlay.setCaptureHidden(false);\n                        capturing=false;\n                        if(software!=null){\n                            captureFailureStreak=0;\n                            lastCaptureSuccessAt=SystemClock.uptimeMillis();''')
+s=s.replace('''                    @Override public void onFailure(int errorCode){\n                        if(!isolated && overlay!=null)overlay.setCaptureHidden(false);\n                        capturing=false;setStatus("Capture refusée (code "+errorCode+")",false);scheduleCapture(850);\n                    }''','''                    @Override public void onFailure(int errorCode){\n                        if(!isolated && overlay!=null)overlay.setCaptureHidden(false);\n                        capturing=false;captureFailureStreak++;\n                        long now=SystemClock.uptimeMillis();\n                        if(errorCode==ERROR_TAKE_SCREENSHOT_INTERVAL_TIME_SHORT){scheduleCapture(CAPTURE_MIN_INTERVAL_MS+80);return;}\n                        if(captureFailureStreak>=3 && (lastCaptureSuccessAt==0L || now-lastCaptureSuccessAt>3500L)) setStatus("Capture temporairement indisponible (code "+errorCode+") • nouvel essai…",false);\n                        scheduleCapture(Math.min(2400,900+captureFailureStreak*220L));\n                    }''')
+s=s.replace('''                if(isolated)takeScreenshotOfWindow(target.windowId,getMainExecutor(),cb);\n                else takeScreenshot(Display.DEFAULT_DISPLAY,getMainExecutor(),cb);''','''                lastCaptureRequestAt=SystemClock.uptimeMillis();\n                if(isolated)takeScreenshotOfWindow(target.windowId,getMainExecutor(),cb);\n                else takeScreenshot(Display.DEFAULT_DISPLAY,getMainExecutor(),cb);''')
+s=s.replace('''            }catch(Throwable t){\n                if(!isolated && overlay!=null)overlay.setCaptureHidden(false);\n                capturing=false;setStatus("Capture indisponible: "+t.getClass().getSimpleName(),false);scheduleCapture(850);\n            }''','''            }catch(Throwable t){\n                if(!isolated && overlay!=null)overlay.setCaptureHidden(false);\n                capturing=false;captureFailureStreak++;\n                long now=SystemClock.uptimeMillis();\n                if(captureFailureStreak>=3 && (lastCaptureSuccessAt==0L || now-lastCaptureSuccessAt>3500L)) setStatus("Capture temporairement indisponible • "+t.getClass().getSimpleName(),false);\n                scheduleCapture(Math.min(2400,900+captureFailureStreak*220L));\n            }''')
+s=s.replace('''            if(found!=null && found.confidence>=.35){\n                boardRect=found;boardDetectMisses=0;\n            }else{\n                boardDetectMisses++;\n                if(boardDetectMisses>=2)boardRect=null;\n            }''','''            if(found!=null && found.confidence>=.28){\n                boardRect=found;boardDetectMisses=0;\n            }else{\n                BoardRect previous=boardRect;\n                boolean previousStillValid=previous!=null && previous.left>=0 && previous.top>=0 && previous.left+previous.size<=frame.width && previous.top+previous.size<=frame.height && FixedTheme.colorDistance(frame,previous)<=28.0;\n                boardDetectMisses++;\n                if(!previousStillValid || boardDetectMisses>=6)boardRect=null;\n            }''')
+s=s.replace('setStatus("Plateau vert/crème non détecté",false);scheduleCapture(650);','setStatus("Plateau perdu • recherche automatique…",false);scheduleCapture(900);')
+p.write_text(s)
+p=root/'app/src/main/java/fr/neo/chessvisionbot/MainActivity.java'; s=p.read_text().replace('V0.6 DYNAMIC GRID','V0.7 STABLE VISION'); p.write_text(s)
+PY
+base64 -d chessvision-ultra-v08/patch.b64 | gzip -dc > /tmp/v08.patch
+echo '70b44fd2e2f702e64b4009825a0dc9451dce2dca68eac06769805c9c300050a5  /tmp/v08.patch' | sha256sum -c -
+awk '/^diff -ruN .* \.\/app\/build.gradle /{p=1} p' /tmp/v08.patch > /tmp/v08-code.patch
+patch --batch -p1 -d /tmp/chessvision < /tmp/v08-code.patch
+base64 -d chessvision-ultra-v09/patch.b64 | gzip -dc > /tmp/v09.patch
+echo '7b4b2ad0a4a78ea1cfe5ed26cd21ddf10be68058465e59fd011da3741fe91711  /tmp/v09.patch' | sha256sum -c -
+patch --batch -p1 -d /tmp/chessvision < /tmp/v09.patch
+grep -q "versionName '0.9.0-auto-fast'" /tmp/chessvision/app/build.gradle
+grep -q 'startThinkingForCurrentPosition' /tmp/chessvision/app/src/main/java/fr/neo/chessvisionbot/ChessBotService.java
