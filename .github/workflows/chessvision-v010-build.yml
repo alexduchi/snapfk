@@ -1,0 +1,98 @@
+name: ChessVision Ultra v0.10 START GUARD
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [chatgpt/chessvision-ultra-v03b-20260823]
+    paths:
+      - '.github/workflows/chessvision-v010-build.yml'
+      - 'chessvision-ultra-v010/**'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/chessvision-ultra-v03b-20260823
+          fetch-depth: 0
+
+      - name: Reconstruct v0.9 source and apply v0.10
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash chessvision-ultra-v09/build_source_fixed.sh
+          base64 -d chessvision-ultra-v010/patch.b64 | gzip -dc > /tmp/v010.patch
+          echo '285e8099509d73a376704a4ca853631c638fab4ab4c147baaf1cab4959ccd57e  /tmp/v010.patch' | sha256sum -c -
+          patch --batch -p1 -d /tmp/chessvision < /tmp/v010.patch
+          grep -q "versionName '0.10.0-start-guard'" /tmp/chessvision/app/build.gradle
+          grep -q 'class StartupSynchronizer' /tmp/chessvision/app/src/main/java/fr/neo/chessvisionbot/core/StartupSynchronizer.java
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Core startup tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/chessvision
+          mkdir -p /tmp/cvclasses
+          find app/src/main/java/fr/neo/chessvisionbot/core -maxdepth 1 -name '*.java' ! -name 'UltraChessEngine.java' > /tmp/cv-sources
+          javac -d /tmp/cvclasses @/tmp/cv-sources core-test/StartupSynchronizerTest.java core-test/AutoOrientationTest.java core-test/ScreenMapperTest.java core-test/MoveConfirmationTest.java
+          java -cp /tmp/cvclasses StartupSynchronizerTest
+          java -cp /tmp/cvclasses AutoOrientationTest
+          java -cp /tmp/cvclasses ScreenMapperTest
+          java -cp /tmp/cvclasses MoveConfirmationTest
+
+      - name: Build Chess22k 1.14
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --depth 1 https://github.com/sandermvdb/chess22k.git /tmp/chess22k
+          cd /tmp/chess22k
+          mvn -q -DskipTests package
+          mkdir -p /tmp/chessvision/app/libs
+          cp target/chess22k-1.14.jar /tmp/chessvision/app/libs/chess22k-1.14.jar
+
+      - uses: android-actions/setup-android@v3
+      - name: Android SDK
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/chessvision
+          gradle --no-daemon :app:assembleDebug
+          mkdir -p "$GITHUB_WORKSPACE/chessvision-ultra-v010-release"
+          cp app/build/outputs/apk/debug/app-debug.apk "$GITHUB_WORKSPACE/chessvision-ultra-v010-release/ChessVisionBot-Ultra-v0.10.apk"
+          sha256sum "$GITHUB_WORKSPACE/chessvision-ultra-v010-release/ChessVisionBot-Ultra-v0.10.apk" | tee "$GITHUB_WORKSPACE/chessvision-ultra-v010-release/SHA256.txt"
+
+      - name: Publish APK to build branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add chessvision-ultra-v010-release/ChessVisionBot-Ultra-v0.10.apk chessvision-ultra-v010-release/SHA256.txt
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'Publish ChessVision Ultra v0.10 APK'
+          git push origin HEAD:chatgpt/chessvision-ultra-v03b-20260823
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ChessVisionBot-Ultra-v0.10
+          path: chessvision-ultra-v010-release/ChessVisionBot-Ultra-v0.10.apk
