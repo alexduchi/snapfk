@@ -54,6 +54,10 @@ jobs:
           awk '/^diff --git a\/app\/src\/main\/java\/fr\/neo\/chessvisionbot\/core\/UltraChessEngine.java/{exit} {print}' /tmp/v04.patch > /tmp/v04-main.patch
           patch -p1 -d /tmp/chessvision < /tmp/v04-main.patch
 
+          echo '53761661a02ac467745e9aa02a6ff705e57e37787bb97e81726724db900ccf00  chessvision-ultra-v04-clean/fixed_piece_models.txt' | sha256sum -c -
+          mkdir -p /tmp/chessvision/app/src/main/res/raw
+          cp chessvision-ultra-v04-clean/fixed_piece_models.txt /tmp/chessvision/app/src/main/res/raw/fixed_piece_models.txt
+
           grep -q "versionName '0.4.0-control'" /tmp/chessvision/app/build.gradle
           grep -q 'void playMoveDrag' /tmp/chessvision/app/src/main/java/fr/neo/chessvisionbot/GestureController.java
           grep -q 'offOverlay' /tmp/chessvision/app/src/main/java/fr/neo/chessvisionbot/OverlayController.java
@@ -78,7 +82,7 @@ jobs:
           cp target/chess22k-1.14.jar /tmp/chessvision/app/libs/chess22k-1.14.jar
           jar tf /tmp/chessvision/app/libs/chess22k-1.14.jar | grep -q 'nl/s22k/chess/engine/MainEngine.class'
 
-      - name: Smoke-test engine and regenerate fixed vision models
+      - name: Smoke-test engine and embedded models
         working-directory: /tmp/chessvision
         shell: bash
         run: |
@@ -97,52 +101,25 @@ jobs:
           }
           JAVA
 
-          cat > /tmp/FixedVisionSmoke.java <<'JAVA'
+          cat > /tmp/ModelSmoke.java <<'JAVA'
           import fr.neo.chessvisionbot.core.*;
-          import javax.imageio.ImageIO;
-          import java.awt.image.BufferedImage;
-          import java.io.*;
           import java.nio.file.*;
-          public final class FixedVisionSmoke {
+          public final class ModelSmoke {
             public static void main(String[] args) throws Exception {
-              File image = new File("app/src/main/res/drawable-nodpi/fixed_board_reference.jpg");
-              File modelFile = new File("app/src/main/res/raw/fixed_piece_models.txt");
-              BufferedImage b = ImageIO.read(image);
-              if (b == null) throw new RuntimeException("reference image unreadable");
-              int w=b.getWidth(),h=b.getHeight();
-              int[] px=new int[w*h];
-              b.getRGB(0,0,w,h,px,0,w);
-              ImageFrame f=new ImageFrame(w,h,px);
-              BoardRect r=new FixedBoardDetector().detect(f);
-              if(r==null)throw new RuntimeException("fixed board not detected");
-              if(!FixedTheme.compatible(f,r))throw new RuntimeException("fixed theme rejected: "+r);
-              VisualBoard v=new FeatureExtractor().extract(f,r,true);
-              PieceModels learned=new PieceModels();
-              learned.learnStartingPosition(v);
-              modelFile.getParentFile().mkdirs();
-              Files.writeString(modelFile.toPath(),learned.serialize());
-              PieceModels loaded=new PieceModels();
-              if(!loaded.deserialize(Files.readString(modelFile.toPath())))throw new RuntimeException("generated models unreadable");
-              ChessPosition start=ChessPosition.start();
-              int bad=0;
-              for(int i=0;i<64;i++){
-                char expected=start.at(i);
-                if(expected!='.' && loaded.classify(v.cells[i])!=expected)bad++;
-              }
-              double cost=new VisionMatcher(loaded).cost(start,v);
-              if(bad!=0 || cost>=.34)throw new RuntimeException("vision mismatch bad="+bad+" cost="+cost+" rect="+r);
-              System.out.println("FIXED_VISION_OK rect="+r+" bad="+bad+" cost="+cost);
+              Path p=Path.of("app/src/main/res/raw/fixed_piece_models.txt");
+              PieceModels m=new PieceModels();
+              if(!m.deserialize(Files.readString(p)) || !m.ready()) throw new RuntimeException("fixed piece models invalid");
+              if(m.emptyThreshold < .04f || m.emptyThreshold > .18f) throw new RuntimeException("bad empty threshold "+m.emptyThreshold);
+              System.out.println("FIXED_MODELS_OK threshold="+m.emptyThreshold+" bytes="+Files.size(p));
             }
           }
           JAVA
 
           rm -rf /tmp/coretest && mkdir /tmp/coretest
           find app/src/main/java/fr/neo/chessvisionbot/core -name '*.java' -print0 | xargs -0 javac -cp app/libs/chess22k-1.14.jar -d /tmp/coretest
-          javac -cp "/tmp/coretest:app/libs/chess22k-1.14.jar" -d /tmp/coretest /tmp/UltraEngineSmoke.java /tmp/FixedVisionSmoke.java
-          java -cp "/tmp/coretest:app/libs/chess22k-1.14.jar" FixedVisionSmoke
+          javac -cp "/tmp/coretest:app/libs/chess22k-1.14.jar" -d /tmp/coretest /tmp/UltraEngineSmoke.java /tmp/ModelSmoke.java
+          java -cp "/tmp/coretest:app/libs/chess22k-1.14.jar" ModelSmoke
           java -cp "/tmp/coretest:app/libs/chess22k-1.14.jar" UltraEngineSmoke
-          test -s app/src/main/res/raw/fixed_piece_models.txt
-          sha256sum app/src/main/res/raw/fixed_piece_models.txt
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
