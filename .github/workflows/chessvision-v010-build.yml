@@ -32,9 +32,34 @@ jobs:
           bash chessvision-ultra-v09/build_source_fixed.sh
           cat chessvision-ultra-v010/parts/part00 chessvision-ultra-v010/parts/part01 chessvision-ultra-v010/parts/part02 chessvision-ultra-v010/parts/part03 chessvision-ultra-v010/parts/part04 | base64 -d | gzip -dc > /tmp/v010.patch
           echo 'da65210201ab74dfe34ccc4900481828c22bcb8c9c4a3aa4263c5faaf598a538  /tmp/v010.patch' | sha256sum -c -
-          patch --batch -p1 -d /tmp/chessvision < /tmp/v010.patch
+          patch --batch -p1 -d /tmp/chessvision < /tmp/v010.patch || true
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('/tmp/chessvision/app/src/main/java/fr/neo/chessvisionbot/ChessBotService.java')
+          s=p.read_text()
+          if 'startupSynchronizer=new StartupSynchronizer()' not in s:
+              anchor='    private boolean autoSideLocked=false;\n'
+              block='''    private boolean autoSideLocked=false;\n    private final StartupSynchronizer startupSynchronizer=new StartupSynchronizer();\n'''
+              s=s.replace(anchor,block,1)
+          inserts=[
+              ('    private int autoCandidateStable=0;\n', '    private int autoCandidateStable=0;\n    private ChessPosition autoCandidatePosition=null;\n    private long autoCandidateHash=Long.MIN_VALUE;\n    private long startupBeganAt=0L;\n    private int startupMisses=0;\n    private volatile long windowCaptureBackoffUntil=0L;\n'),
+          ]
+          if 'autoCandidatePosition=null' not in s:
+              for a,b in inserts: s=s.replace(a,b,1)
+          marker='''                        // One random vendor/API failure should not replace a good\n'''
+          if 'windowCaptureBackoffUntil=now+15000L;' not in s.split(marker)[0][-900:]:
+              fallback='''                        if(isolated){\n                            windowCaptureBackoffUntil=now+15000L;\n                            captureFailureStreak=0;\n                            scheduleCapture(120);\n                            return;\n                        }\n'''
+              s=s.replace(marker,fallback+marker,1)
+          catch_old='''                long now=SystemClock.uptimeMillis();\n                if(captureFailureStreak>=3'''
+          catch_new='''                long now=SystemClock.uptimeMillis();\n                if(isolated){windowCaptureBackoffUntil=now+15000L;captureFailureStreak=0;scheduleCapture(120);return;}\n                if(captureFailureStreak>=3'''
+          if catch_old in s: s=s.replace(catch_old,catch_new,1)
+          p.write_text(s)
+          PY
+          rm -f /tmp/chessvision/app/src/main/java/fr/neo/chessvisionbot/ChessBotService.java.rej
           grep -q "versionName '0.10.0-start-guard'" /tmp/chessvision/app/build.gradle
           grep -q 'class StartupSynchronizer' /tmp/chessvision/app/src/main/java/fr/neo/chessvisionbot/core/StartupSynchronizer.java
+          grep -q 'startupSynchronizer=new StartupSynchronizer' /tmp/chessvision/app/src/main/java/fr/neo/chessvisionbot/ChessBotService.java
+          grep -q 'windowCaptureBackoffUntil' /tmp/chessvision/app/src/main/java/fr/neo/chessvisionbot/ChessBotService.java
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
