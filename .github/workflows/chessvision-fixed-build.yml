@@ -7,13 +7,10 @@ on:
     paths:
       - chessvision-fixed-build/payload/**
       - .github/workflows/chessvision-fixed-build.yml
-  pull_request:
-    branches:
-      - main
-    paths:
-      - chessvision-fixed-build/payload/**
-      - .github/workflows/chessvision-fixed-build.yml
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -22,6 +19,22 @@ jobs:
     steps:
       - name: Checkout build branch
         uses: actions/checkout@v4
+
+      - name: Restore isolated source
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat chessvision-fixed-build/payload/source.part00 \
+              chessvision-fixed-build/payload/source.part01 \
+              chessvision-fixed-build/payload/source.part02 \
+              chessvision-fixed-build/payload/source.part03 \
+              chessvision-fixed-build/payload/source.part04 \
+              chessvision-fixed-build/payload/source.part05 | tr -d '\r\n' | base64 -d > /tmp/chessvision.zip
+          echo 'c3245d2a05456134d485bced3e17ffce918b8dd93b829674639dd9d9ca293966  /tmp/chessvision.zip' | sha256sum -c -
+          unzip -t /tmp/chessvision.zip >/dev/null
+          rm -rf /tmp/chessvision
+          mkdir /tmp/chessvision
+          unzip -q /tmp/chessvision.zip -d /tmp/chessvision
 
       - name: Setup Java 17
         uses: actions/setup-java@v4
@@ -33,32 +46,28 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Install Android 35
-        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
 
-      - name: Restore isolated source
-        run: |
-          cat chessvision-fixed-build/payload/source.part* | tr -d '\r\n' | base64 -d > /tmp/chessvision.zip
-          sha256sum /tmp/chessvision.zip
-          unzip -t /tmp/chessvision.zip
-          rm -rf /tmp/chessvision
-          mkdir /tmp/chessvision
-          unzip -q /tmp/chessvision.zip -d /tmp/chessvision
-
       - name: Build debug APK
         working-directory: /tmp/chessvision
-        run: gradle --no-daemon :app:assembleDebug
+        run: gradle --no-daemon --stacktrace :app:assembleDebug
 
       - name: Verify APK
+        shell: bash
         run: |
+          set -euo pipefail
           APK=/tmp/chessvision/app/build/outputs/apk/debug/app-debug.apk
           test -s "$APK"
-          apksigner verify --verbose --print-certs "$APK"
-          aapt dump badging "$APK" | head -n 8
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | head -n 8
           mkdir -p deliverables
           cp "$APK" deliverables/ChessVisionBot-Fixed-v0.2.apk
           sha256sum deliverables/ChessVisionBot-Fixed-v0.2.apk > deliverables/SHA256SUMS.txt
@@ -71,3 +80,4 @@ jobs:
             deliverables/ChessVisionBot-Fixed-v0.2.apk
             deliverables/SHA256SUMS.txt
           if-no-files-found: error
+          retention-days: 7
