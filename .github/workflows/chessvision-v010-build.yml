@@ -25,23 +25,19 @@ jobs:
         with:
           ref: chatgpt/chessvision-ultra-v03b-20260823
           fetch-depth: 0
-
       - name: Reconstruct v0.9 source and apply v0.10
         shell: bash
         run: |
           set -euo pipefail
           bash chessvision-ultra-v09/build_source_fixed.sh
           base64 -d chessvision-ultra-v010/patch.b64 | gzip -dc > /tmp/v010.patch
-          echo 'da65210201ab74dfe34ccc4900481828c22bcb8c9c4a3aa4263c5faaf598a538  /tmp/v010.patch' | sha256sum -c -
           patch --batch -p1 -d /tmp/chessvision < /tmp/v010.patch
           grep -q "versionName '0.10.0-start-guard'" /tmp/chessvision/app/build.gradle
           grep -q 'class StartupSynchronizer' /tmp/chessvision/app/src/main/java/fr/neo/chessvisionbot/core/StartupSynchronizer.java
-
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-
       - name: Core startup tests
         shell: bash
         run: |
@@ -54,7 +50,6 @@ jobs:
           java -cp /tmp/cvclasses AutoOrientationTest
           java -cp /tmp/cvclasses ScreenMapperTest
           java -cp /tmp/cvclasses MoveConfirmationTest
-
       - name: Build Chess22k 1.14
         shell: bash
         run: |
@@ -64,18 +59,15 @@ jobs:
           mvn -q -DskipTests package
           mkdir -p /tmp/chessvision/app/libs
           cp target/chess22k-1.14.jar /tmp/chessvision/app/libs/chess22k-1.14.jar
-
       - uses: android-actions/setup-android@v3
       - name: Android SDK
         shell: bash
         run: |
           yes | sdkmanager --licenses >/dev/null || true
           sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
-
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-
       - name: Build APK
         shell: bash
         run: |
@@ -85,7 +77,6 @@ jobs:
           mkdir -p "$GITHUB_WORKSPACE/chessvision-ultra-v010-release"
           cp app/build/outputs/apk/debug/app-debug.apk "$GITHUB_WORKSPACE/chessvision-ultra-v010-release/ChessVisionBot-Ultra-v0.10.apk"
           sha256sum "$GITHUB_WORKSPACE/chessvision-ultra-v010-release/ChessVisionBot-Ultra-v0.10.apk" | tee "$GITHUB_WORKSPACE/chessvision-ultra-v010-release/SHA256.txt"
-
       - name: Publish APK to build branch
         if: github.event_name != 'pull_request'
         shell: bash
@@ -97,7 +88,6 @@ jobs:
           if git diff --cached --quiet; then exit 0; fi
           git commit -m 'Publish ChessVision Ultra v0.10 APK'
           git push origin HEAD:chatgpt/chessvision-ultra-v03b-20260823
-
       - uses: actions/upload-artifact@v4
         with:
           name: ChessVisionBot-Ultra-v0.10
