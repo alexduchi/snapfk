@@ -54,17 +54,11 @@ jobs:
           awk '/^diff --git a\/app\/src\/main\/java\/fr\/neo\/chessvisionbot\/core\/UltraChessEngine.java/{exit} {print}' /tmp/v04.patch > /tmp/v04-main.patch
           patch -p1 -d /tmp/chessvision < /tmp/v04-main.patch
 
-          ENGINE=/tmp/chessvision/app/src/main/java/fr/neo/chessvisionbot/core/UltraChessEngine.java
-          sed -i 's/int threads=1;/int threads=2;/' "$ENGINE"
-          sed -i 's/ttSetSize.invoke(null,32)/ttSetSize.invoke(null,64)/' "$ENGINE"
-
           cp chessvision-ultra-v04-clean/fixed_piece_models.txt /tmp/chessvision/app/src/main/res/raw/fixed_piece_models.txt
           sha256sum chessvision-ultra-v04-clean/fixed_piece_models.txt
           grep -q "versionName '0.4.0-control'" /tmp/chessvision/app/build.gradle
           grep -q 'void playMoveDrag' /tmp/chessvision/app/src/main/java/fr/neo/chessvisionbot/GestureController.java
           grep -q 'offOverlay' /tmp/chessvision/app/src/main/java/fr/neo/chessvisionbot/OverlayController.java
-          grep -q 'int threads=2' "$ENGINE"
-          grep -q 'ttSetSize.invoke(null,64)' "$ENGINE"
 
       - name: Setup Java 17
         uses: actions/setup-java@v4
