@@ -1,15 +1,15 @@
-name: ChessVision Ultra v0.8 APK
+name: ChessVision Ultra v0.9 APK
 
 on:
   push:
     branches: [chatgpt/chessvision-ultra-v03b-20260823]
     paths:
-      - chessvision-ultra-v08/**
+      - chessvision-ultra-v09/**
       - .github/workflows/chessvision-fixed-build.yml
   pull_request:
     branches: [main]
     paths:
-      - chessvision-ultra-v08/**
+      - chessvision-ultra-v09/**
       - .github/workflows/chessvision-fixed-build.yml
   workflow_dispatch:
 
@@ -22,8 +22,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-
-      - name: Restore v0.7 and apply v0.8 fixes
+      - name: Restore v0.8 and apply v0.9
         shell: bash
         run: |
           set -euo pipefail
@@ -38,7 +37,6 @@ jobs:
           base64 -d chessvision-ultra-v05/patch.b64 | gzip -dc > /tmp/v05.patch && patch -p1 -d /tmp/chessvision < /tmp/v05.patch
           base64 -d chessvision-ultra-v06/patch.b64 | gzip -dc > /tmp/v06.patch
           patch --batch -p1 -d /tmp/chessvision < /tmp/v06.patch || true
-
           python3 - <<'PY'
           from pathlib import Path
           root=Path('/tmp/chessvision')
@@ -57,35 +55,35 @@ jobs:
           p.write_text(s)
           p=root/'app/src/main/java/fr/neo/chessvisionbot/MainActivity.java'; s=p.read_text().replace('V0.6 DYNAMIC GRID','V0.7 STABLE VISION'); p.write_text(s)
           PY
-
           base64 -d chessvision-ultra-v08/patch.b64 | gzip -dc > /tmp/v08.patch
           echo '70b44fd2e2f702e64b4009825a0dc9451dce2dca68eac06769805c9c300050a5  /tmp/v08.patch' | sha256sum -c -
           awk '/^diff -ruN .* \.\/app\/build.gradle /{p=1} p' /tmp/v08.patch > /tmp/v08-code.patch
           patch --batch -p1 -d /tmp/chessvision < /tmp/v08-code.patch
           grep -q "versionName '0.8.0-promotion-confirm'" /tmp/chessvision/app/build.gradle
-          grep -q 'class MoveConfirmationAnalyzer' /tmp/chessvision/app/src/main/java/fr/neo/chessvisionbot/core/MoveConfirmationAnalyzer.java
-          grep -q 'choosePromotion' /tmp/chessvision/app/src/main/java/fr/neo/chessvisionbot/GestureController.java
-
+          base64 -d chessvision-ultra-v09/patch.b64 | gzip -dc > /tmp/v09.patch
+          echo '7b4b2ad0a4a78ea1cfe5ed26cd21ddf10be68058465e59fd011da3741fe91711  /tmp/v09.patch' | sha256sum -c -
+          patch --batch -p1 -d /tmp/chessvision < /tmp/v09.patch
+          grep -q "versionName '0.9.0-auto-fast'" /tmp/chessvision/app/build.gradle
+          grep -q 'startThinkingForCurrentPosition' /tmp/chessvision/app/src/main/java/fr/neo/chessvisionbot/ChessBotService.java
+          grep -q 'AUTO side/orientation' /tmp/chessvision/app/src/main/java/fr/neo/chessvisionbot/ChessBotService.java
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-
       - name: Chess22k
         run: |
           git clone --depth 1 https://github.com/sandermvdb/chess22k.git /tmp/chess22k
           cd /tmp/chess22k && mvn -q -DskipTests package
           mkdir -p /tmp/chessvision/app/libs
           cp target/chess22k-1.14.jar /tmp/chessvision/app/libs/chess22k-1.14.jar
-
       - name: Core tests
         working-directory: /tmp/chessvision
         run: |
           rm -rf /tmp/coretest && mkdir /tmp/coretest
           find app/src/main/java/fr/neo/chessvisionbot/core -name '*.java' -print0 | xargs -0 javac -cp app/libs/chess22k-1.14.jar -d /tmp/coretest
-          javac -cp "/tmp/coretest:app/libs/chess22k-1.14.jar" -d /tmp/coretest core-test/ScreenMapperTest.java
+          javac -cp "/tmp/coretest:app/libs/chess22k-1.14.jar" -d /tmp/coretest core-test/ScreenMapperTest.java core-test/AutoOrientationTest.java
           java -cp "/tmp/coretest:app/libs/chess22k-1.14.jar" ScreenMapperTest
-
+          java -cp "/tmp/coretest:app/libs/chess22k-1.14.jar" AutoOrientationTest
       - uses: android-actions/setup-android@v3
       - run: |
           yes | sdkmanager --licenses >/dev/null || true
@@ -93,21 +91,18 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-
       - name: Build APK
         working-directory: /tmp/chessvision
         run: gradle --no-daemon :app:assembleDebug
-
       - name: Verify and collect
         run: |
           APK=/tmp/chessvision/app/build/outputs/apk/debug/app-debug.apk
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
           mkdir -p deliverables
-          cp "$APK" deliverables/ChessVisionBot-Ultra-v0.8.apk
-          sha256sum deliverables/ChessVisionBot-Ultra-v0.8.apk > deliverables/SHA256SUMS.txt
-
+          cp "$APK" deliverables/ChessVisionBot-Ultra-v0.9.apk
+          sha256sum deliverables/ChessVisionBot-Ultra-v0.9.apk > deliverables/SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: ChessVisionBot-Ultra-v0.8
+          name: ChessVisionBot-Ultra-v0.9
           path: deliverables/
           retention-days: 7
