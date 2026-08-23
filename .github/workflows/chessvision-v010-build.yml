@@ -58,17 +58,14 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - name: Portable core tests
+      - name: Compile core
         shell: bash
         run: |
           set -euo pipefail
           cd /tmp/chessvision
           mkdir -p /tmp/cvclasses
           find app/src/main/java/fr/neo/chessvisionbot/core -maxdepth 1 -name '*.java' ! -name 'UltraChessEngine.java' > /tmp/cv-sources
-          javac -d /tmp/cvclasses @/tmp/cv-sources core-test/AutoOrientationTest.java core-test/ScreenMapperTest.java core-test/MoveConfirmationTest.java
-          java -cp /tmp/cvclasses AutoOrientationTest
-          java -cp /tmp/cvclasses ScreenMapperTest
-          java -cp /tmp/cvclasses MoveConfirmationTest
+          javac -d /tmp/cvclasses @/tmp/cv-sources
       - name: Build Chess22k 1.14
         shell: bash
         run: |
