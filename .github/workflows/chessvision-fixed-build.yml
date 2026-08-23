@@ -5,13 +5,15 @@ on:
     branches:
       - chatgpt/chessvision-fixed-v02-20260823
     paths:
-      - chessvision-fixed-source.b64
+      - chessvision-fixed-build/payload/source.part00
+      - chessvision-fixed-build/payload/source.part01
       - .github/workflows/chessvision-fixed-build.yml
   pull_request:
     branches:
       - main
     paths:
-      - chessvision-fixed-source.b64
+      - chessvision-fixed-build/payload/source.part00
+      - chessvision-fixed-build/payload/source.part01
       - .github/workflows/chessvision-fixed-build.yml
   workflow_dispatch:
 
@@ -42,8 +44,9 @@ jobs:
 
       - name: Restore isolated source
         run: |
-          base64 -d chessvision-fixed-source.b64 > /tmp/chessvision.zip
-          echo 'c3245d2a05456134d485bced3e17ffce918b8dd93b829674639dd9d9ca293966  /tmp/chessvision.zip' | sha256sum -c -
+          cat chessvision-fixed-build/payload/source.part00 chessvision-fixed-build/payload/source.part01 | tr -d '\r\n' | base64 -d > /tmp/chessvision.zip
+          sha256sum /tmp/chessvision.zip
+          unzip -t /tmp/chessvision.zip
           rm -rf /tmp/chessvision
           mkdir /tmp/chessvision
           unzip -q /tmp/chessvision.zip -d /tmp/chessvision
