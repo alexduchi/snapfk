@@ -7,6 +7,11 @@ on:
     paths:
       - '.github/workflows/chessvision-v010-build.yml'
       - 'chessvision-ultra-v010/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/chessvision-v010-build.yml'
+      - 'chessvision-ultra-v010/**'
 
 permissions:
   contents: write
@@ -82,6 +87,7 @@ jobs:
           sha256sum "$GITHUB_WORKSPACE/chessvision-ultra-v010-release/ChessVisionBot-Ultra-v0.10.apk" | tee "$GITHUB_WORKSPACE/chessvision-ultra-v010-release/SHA256.txt"
 
       - name: Publish APK to build branch
+        if: github.event_name != 'pull_request'
         shell: bash
         run: |
           set -euo pipefail
@@ -96,5 +102,3 @@ jobs:
         with:
           name: ChessVisionBot-Ultra-v0.10
           path: chessvision-ultra-v010-release/ChessVisionBot-Ultra-v0.10.apk
-
-# trigger 2026-08-23T19:01:30Z
