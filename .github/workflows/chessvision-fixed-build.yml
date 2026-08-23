@@ -97,6 +97,7 @@ jobs:
               Move m = e.bestMove(p, 350);
               if (m == null || !p.legalMoves().contains(m)) throw new RuntimeException("invalid move " + m);
               System.out.println("ULTRA_ENGINE_OK " + e.backend() + " move=" + m.uci());
+              System.exit(0);
             }
           }
           JAVA
