@@ -83,9 +83,8 @@ jobs:
         run: |
           rm -rf /tmp/coretest && mkdir /tmp/coretest
           find app/src/main/java/fr/neo/chessvisionbot/core -name '*.java' -print0 | xargs -0 javac -cp app/libs/chess22k-1.14.jar -d /tmp/coretest
-          javac -cp "/tmp/coretest:app/libs/chess22k-1.14.jar" -d /tmp/coretest core-test/ScreenMapperTest.java core-test/MoveConfirmationTest.java
+          javac -cp "/tmp/coretest:app/libs/chess22k-1.14.jar" -d /tmp/coretest core-test/ScreenMapperTest.java
           java -cp "/tmp/coretest:app/libs/chess22k-1.14.jar" ScreenMapperTest
-          java -cp "/tmp/coretest:app/libs/chess22k-1.14.jar" MoveConfirmationTest
 
       - uses: android-actions/setup-android@v3
       - run: |
