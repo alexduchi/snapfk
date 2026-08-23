@@ -1,17 +1,11 @@
-name: ChessVision Ultra v0.3 APK
+name: ChessVision Ultra v0.4 APK
 
 on:
   push:
     branches:
       - chatgpt/chessvision-ultra-v03b-20260823
     paths:
-      - chessvision-ultra-v03/**
-      - .github/workflows/chessvision-fixed-build.yml
-  pull_request:
-    branches:
-      - main
-    paths:
-      - chessvision-ultra-v03/**
+      - chessvision-ultra-v04-clean/**
       - .github/workflows/chessvision-fixed-build.yml
   workflow_dispatch:
 
@@ -26,7 +20,7 @@ jobs:
       - name: Checkout build branch
         uses: actions/checkout@v4
 
-      - name: Restore v0.2 and apply v0.3 patch
+      - name: Restore v0.3 and apply v0.4 control patch
         shell: bash
         run: |
           set -euo pipefail
@@ -40,10 +34,24 @@ jobs:
           rm -rf /tmp/chessvision
           mkdir /tmp/chessvision
           unzip -q /tmp/chessvision.zip -d /tmp/chessvision
+
           base64 -d chessvision-ultra-v03/patch.b64 | gzip -dc > /tmp/v03.patch
           echo '126e8036b258ecf2d18ce9f65091535261731d5076c15142692bed22fdd5b8a6  /tmp/v03.patch' | sha256sum -c -
           patch -p1 -d /tmp/chessvision < /tmp/v03.patch
-          grep -q "versionName '0.3.0-ultra'" /tmp/chessvision/app/build.gradle
+
+          cat chessvision-ultra-v04-clean/patch.part00 \
+              chessvision-ultra-v04-clean/patch.part01 \
+              chessvision-ultra-v04-clean/patch.part02 \
+              chessvision-ultra-v04-clean/patch.part03 \
+              chessvision-ultra-v04-clean/patch.part04 > /tmp/v04.patch
+          echo '27521f6e9ca01e3baae291a37e34c424c0904ec8b0734db68a34f7d1dbf98351  /tmp/v04.patch' | sha256sum -c -
+          patch -p1 -d /tmp/chessvision < /tmp/v04.patch
+
+          echo '53761661a02ac467745e9aa02a6ff705e57e37787bb97e81726724db900ccf00  chessvision-ultra-v04-clean/fixed_piece_models.txt' | sha256sum -c -
+          cp chessvision-ultra-v04-clean/fixed_piece_models.txt /tmp/chessvision/app/src/main/res/raw/fixed_piece_models.txt
+          grep -q "versionName '0.4.0-control'" /tmp/chessvision/app/build.gradle
+          grep -q 'void playMoveDrag' /tmp/chessvision/app/src/main/java/fr/neo/chessvisionbot/GestureController.java
+          grep -q 'offOverlay' /tmp/chessvision/app/src/main/java/fr/neo/chessvisionbot/OverlayController.java
 
       - name: Setup Java 17
         uses: actions/setup-java@v4
@@ -64,7 +72,7 @@ jobs:
           cp target/chess22k-1.14.jar /tmp/chessvision/app/libs/chess22k-1.14.jar
           jar tf /tmp/chessvision/app/libs/chess22k-1.14.jar | grep -q 'nl/s22k/chess/engine/MainEngine.class'
 
-      - name: Smoke-test ultra engine
+      - name: Smoke-test engine and fixed vision
         working-directory: /tmp/chessvision
         shell: bash
         run: |
@@ -76,7 +84,7 @@ jobs:
               UltraChessEngine e = new UltraChessEngine();
               if (!e.isUltraReady()) throw new RuntimeException("Chess22k not loaded: " + e.backend());
               ChessPosition p = ChessPosition.start();
-              Move m = e.bestMove(p, 250);
+              Move m = e.bestMove(p, 300);
               if (m == null || !p.legalMoves().contains(m)) throw new RuntimeException("invalid move " + m);
               System.out.println("ULTRA_ENGINE_OK " + e.backend() + " move=" + m.uci());
             }
@@ -84,8 +92,9 @@ jobs:
           JAVA
           rm -rf /tmp/coretest && mkdir /tmp/coretest
           find app/src/main/java/fr/neo/chessvisionbot/core -name '*.java' -print0 | xargs -0 javac -cp app/libs/chess22k-1.14.jar -d /tmp/coretest
-          javac -cp "/tmp/coretest:app/libs/chess22k-1.14.jar" -d /tmp/coretest /tmp/UltraEngineSmoke.java
+          javac -cp "/tmp/coretest:app/libs/chess22k-1.14.jar" -d /tmp/coretest /tmp/UltraEngineSmoke.java core-test/FixedReferenceTest.java
           java -cp "/tmp/coretest:app/libs/chess22k-1.14.jar" UltraEngineSmoke
+          java -cp "/tmp/coretest:app/libs/chess22k-1.14.jar" FixedReferenceTest
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
@@ -96,7 +105,7 @@ jobs:
           yes | sdkmanager --licenses >/dev/null || true
           sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
 
-      - name: Setup Gradle
+      - name: Setup Gradle 8.9
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
@@ -114,15 +123,15 @@ jobs:
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | head -n 8
           mkdir -p deliverables
-          cp "$APK" deliverables/ChessVisionBot-Ultra-v0.3.apk
-          sha256sum deliverables/ChessVisionBot-Ultra-v0.3.apk > deliverables/SHA256SUMS.txt
+          cp "$APK" deliverables/ChessVisionBot-Ultra-v0.4.apk
+          sha256sum deliverables/ChessVisionBot-Ultra-v0.4.apk > deliverables/SHA256SUMS.txt
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ChessVisionBot-Ultra-v0.3
+          name: ChessVisionBot-Ultra-v0.4
           path: |
-            deliverables/ChessVisionBot-Ultra-v0.3.apk
+            deliverables/ChessVisionBot-Ultra-v0.4.apk
             deliverables/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 7
