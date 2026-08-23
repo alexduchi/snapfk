@@ -1,0 +1,75 @@
+name: ChessVision Ultra v0.9 Temporary CI 2
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/chessvision-v09-temp-ci2.yml]
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/chessvision-ultra-v03b-20260823
+      - name: Reconstruct v0.9
+        run: bash chessvision-ultra-v09/build_source.sh
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Build Chess22k
+        run: |
+          git clone --depth 1 https://github.com/sandermvdb/chess22k.git /tmp/chess22k
+          cd /tmp/chess22k && mvn -q -DskipTests package
+          mkdir -p /tmp/chessvision/app/libs
+          cp target/chess22k-1.14.jar /tmp/chessvision/app/libs/chess22k-1.14.jar
+      - name: Core tests
+        working-directory: /tmp/chessvision
+        run: |
+          rm -rf /tmp/coretest && mkdir /tmp/coretest
+          find app/src/main/java/fr/neo/chessvisionbot/core -name '*.java' -print0 | xargs -0 javac -cp app/libs/chess22k-1.14.jar -d /tmp/coretest
+          javac -cp "/tmp/coretest:app/libs/chess22k-1.14.jar" -d /tmp/coretest core-test/ScreenMapperTest.java core-test/AutoOrientationTest.java
+          java -cp "/tmp/coretest:app/libs/chess22k-1.14.jar" ScreenMapperTest
+          java -cp "/tmp/coretest:app/libs/chess22k-1.14.jar" AutoOrientationTest
+      - uses: android-actions/setup-android@v3
+      - run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Build APK
+        working-directory: /tmp/chessvision
+        run: gradle --no-daemon :app:assembleDebug
+      - name: Verify APK
+        working-directory: /tmp/chessvision
+        run: "$ANDROID_HOME/build-tools/35.0.0/apksigner verify --verbose app/build/outputs/apk/debug/app-debug.apk"
+      - name: Export APK
+        if: success()
+        run: |
+          set -euo pipefail
+          APK=/tmp/chessvision/app/build/outputs/apk/debug/app-debug.apk
+          rm -rf chessvision-ultra-v09-output/apk.part* chessvision-ultra-v09-output/SHA256.txt
+          mkdir -p chessvision-ultra-v09-output
+          sha256sum "$APK" | awk '{print $1}' > chessvision-ultra-v09-output/SHA256.txt
+          base64 -w0 "$APK" > /tmp/apk.b64
+          split -b 60000 -d -a 2 /tmp/apk.b64 chessvision-ultra-v09-output/apk.part
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add chessvision-ultra-v09-output
+          git commit -m 'Export ChessVision Ultra v0.9 APK' || true
+          git push origin HEAD:chatgpt/chessvision-ultra-v03b-20260823
+      - name: Export build status
+        if: always()
+        run: |
+          git fetch origin chatgpt/chessvision-ultra-v03b-20260823
+          git reset --hard origin/chatgpt/chessvision-ultra-v03b-20260823
+          mkdir -p chessvision-ultra-v09-output
+          printf '%s\n' '${{ job.status }}' > chessvision-ultra-v09-output/build-status.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add chessvision-ultra-v09-output/build-status.txt
+          git commit -m 'ChessVision v0.9 build status' || exit 0
+          git push origin HEAD:chatgpt/chessvision-ultra-v03b-20260823
