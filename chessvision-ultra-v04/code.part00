@@ -1,0 +1,78 @@
+diff -ruN '--exclude=.github' '--exclude=BUILD_STATUS.md' '--exclude=README.md' '--exclude=THIRD_PARTY.md' '--exclude=fixed_piece_models.txt' /tmp/cv03orig/ChessVisionBotV03/app/build.gradle /mnt/data/chessv04/ChessVisionBotV03/app/build.gradle
+--- /tmp/cv03orig/ChessVisionBotV03/app/build.gradle	2026-08-23 12:17:35.000000000 +0000
++++ /mnt/data/chessv04/ChessVisionBotV03/app/build.gradle	2026-08-23 12:38:17.447346379 +0000
+@@ -8,8 +8,8 @@
+         applicationId 'fr.neo.chessvisionbot'
+         minSdk 30
+         targetSdk 35
+-        versionCode 3
+-        versionName '0.3.0-ultra'
++        versionCode 4
++        versionName '0.4.0-control'
+     }
+ 
+     buildTypes {
+diff -ruN '--exclude=.github' '--exclude=BUILD_STATUS.md' '--exclude=README.md' '--exclude=THIRD_PARTY.md' '--exclude=fixed_piece_models.txt' /tmp/cv03orig/ChessVisionBotV03/app/src/main/java/fr/neo/chessvisionbot/ChessBotService.java /mnt/data/chessv04/ChessVisionBotV03/app/src/main/java/fr/neo/chessvisionbot/ChessBotService.java
+--- /tmp/cv03orig/ChessVisionBotV03/app/src/main/java/fr/neo/chessvisionbot/ChessBotService.java	2026-08-23 12:17:30.000000000 +0000
++++ /mnt/data/chessv04/ChessVisionBotV03/app/src/main/java/fr/neo/chessvisionbot/ChessBotService.java	2026-08-23 12:38:16.912717746 +0000
+@@ -44,7 +44,8 @@
+     private boolean awaitingBotConfirm=false;
+     private ChessPosition confirmBefore,confirmAfter;
+     private Move confirmMove;
+-    private int confirmGood=0,confirmFail=0;
++    private int confirmGood=0,confirmFail=0,confirmRetryCount=0;
++    private volatile boolean confirmRetrying=false;
+ 
+     @Override protected void onServiceConnected(){
+         super.onServiceConnected();INSTANCE=this;loadPrefs();fixedModelsReady=loadFixedModels();gestures=new GestureController(this);
+@@ -55,20 +56,26 @@
+             public void cycleSide(){config.botWhite=!config.botWhite;savePrefs();overlay.setConfig(config);setStatus(config.botWhite?"Le bot jouera les Blancs":"Le bot jouera les Noirs",true);}
+             public void cycleOrientation(){config.whiteBottom=!config.whiteBottom;boardRect=null;boardScreenRect=null;lastVisual=null;position=null;stableCurrent=0;startStable=0;startOccupancy=Long.MIN_VALUE;matcher.reset();forceScan=true;savePrefs();overlay.setConfig(config);setStatus(config.whiteBottom?"Blancs en bas • nouvelle partie à synchroniser":"Noirs en bas • nouvelle partie à synchroniser",true);scheduleCapture(50);}
+             public void cycleDelay(){cycleDelayPreset();savePrefs();overlay.setConfig(config);}
++            public void offOverlay(){stopAndHideOverlay();}
+         });
+         overlay.setConfig(config);
+-        if(fixedModelsReady)overlay.setStatus("VISION v0.3 ✓ • moteur "+engine.backend()+" • ouvre la partie puis START",true);
++        if(fixedModelsReady)overlay.setStatus("v0.4 ✓ • "+engine.backend()+" • START",true);
+         else overlay.setStatus("Erreur interne: modèles du thème fixe introuvables",false);
+     }
+ 
+     public void showOverlay(){main.post(()->{if(overlay!=null)overlay.show();});}
++    private void stopAndHideOverlay(){
++        running=false;movePending=false;awaitingBotConfirm=false;confirmRetrying=false;
++        main.removeCallbacksAndMessages(null);
++        if(overlay!=null){overlay.setRunning(false);overlay.hideAll();}
++    }
+     private void setRunning(boolean v){
+         if(v&&!fixedModelsReady){running=false;if(overlay!=null)overlay.setRunning(false);setStatus("Modèles du thème fixe non chargés • impossible de démarrer",false);return;}
+         running=v;if(overlay!=null)overlay.setRunning(v);
+         if(v){if(position==null)setStatus("Recherche de la position de départ • "+engine.backend(),true);else setStatus("Analyse active • "+engine.backend(),true);scheduleCapture(40);}else setStatus("En pause",true);
+     }
+     private void resetNewGame(){
+-        running=false;if(overlay!=null)overlay.setRunning(false);position=null;lastVisual=null;boardRect=null;boardScreenRect=null;forceScan=true;stableCurrent=0;mismatchCount=0;startStable=0;themeMismatch=0;lastOccupancy=Long.MIN_VALUE;startOccupancy=Long.MIN_VALUE;awaitingBotConfirm=false;confirmBefore=null;confirmAfter=null;confirmMove=null;confirmGood=confirmFail=0;thinking=false;movePending=false;matcher.reset();
++        running=false;if(overlay!=null)overlay.setRunning(false);position=null;lastVisual=null;boardRect=null;boardScreenRect=null;forceScan=true;stableCurrent=0;mismatchCount=0;startStable=0;themeMismatch=0;lastOccupancy=Long.MIN_VALUE;startOccupancy=Long.MIN_VALUE;awaitingBotConfirm=false;confirmBefore=null;confirmAfter=null;confirmMove=null;confirmGood=confirmFail=confirmRetryCount=0;confirmRetrying=false;thinking=false;movePending=false;matcher.reset();
+         setStatus("NOUVELLE PARTIE • montre la position initiale avec le thème fixe",true);scheduleCapture(50);
+     }
+     private void cycleDelayPreset(){
+@@ -218,16 +225,37 @@
+         gestures.playMove(m,rect,config.whiteBottom,ok->{
+             movePending=false;
+             if(!ok){setStatus("Le geste Android a été annulé • bot en pause",false);setRunning(false);return;}
+-            awaitingBotConfirm=true;confirmBefore=before;confirmAfter=after;confirmMove=m;confirmGood=0;confirmFail=0;stableCurrent=0;matcher.reset();
++            awaitingBotConfirm=true;confirmBefore=before;confirmAfter=after;confirmMove=m;confirmGood=0;confirmFail=0;confirmRetryCount=0;confirmRetrying=false;stableCurrent=0;matcher.reset();
+             setStatus("Geste "+m.uci()+" envoyé • vérification visuelle…",true);scheduleCapture(360);
+         });
+     }
+ 
+     private void handleBotConfirmation(VisualBoard v){
++        if(confirmRetrying)return;
+         double before=matcher.cost(confirmBefore,v),after=matcher.cost(confirmAfter,v);
+         if(after<.52&&after+.015<before){confirmGood++;confirmFail=0;}else if(before+.015<after){confirmFail++;confirmGood=0;}else{confirmGood=0;}
+-        if(confirmGood>=2){position=confirmAfter;awaitingBotConfirm=false;confirmBefore=null;confirmAfter=null;Move m=confirmMove;confirmMove=null;matcher.reset();stableCurrent=0;lastOccupancy=Long.MIN_VALUE;setStatus("Coup "+m.uci()+" confirmé • j’observe l’adversaire",true);return;}
+-        if(confirmFail>=5){boolean promotion=confirmMove!=null&&confirmMove.promotion!='\0';awaitingBotConfirm=false;setRunning(false);setStatus(promotion?"Promotion détectée: sélectionne la dame puis relance START":"Le coup n’est pas apparu à l’écran • bot arrêté par sécurité",false);}
++        if(confirmGood>=2){
++            position=confirmAfter;awaitingBotConfirm=false;confirmBefore=null;confirmAfter=null;Move m=confirmMove;confirmMove=null;
++            confirmRetryCount=0;matcher.reset();stableCurrent=0;lastOccupancy=Long.MIN_VALUE;
++            setStatus("Coup "+m.uci()+" confirmé • j’observe l’adversaire",true);return;
++        }
++        // If tap→tap was accepted by Android but the board did not change,
