@@ -1,0 +1,22 @@
+name: ChessVision v0.9 Main Probe
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/chessvision-v09-probe-main.yml]
+permissions:
+  contents: write
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/chessvision-ultra-v03b-20260823
+      - run: |
+          mkdir -p chessvision-ultra-v09-output
+          printf 'started %s\n' "$(date -u +%FT%TZ)" > chessvision-ultra-v09-output/probe-main.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add chessvision-ultra-v09-output/probe-main.txt
+          git commit -m 'ChessVision v0.9 main CI probe' || exit 0
+          git push origin HEAD:chatgpt/chessvision-ultra-v03b-20260823
