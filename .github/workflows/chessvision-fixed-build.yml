@@ -7,6 +7,12 @@ on:
     paths:
       - chessvision-ultra-v03/**
       - .github/workflows/chessvision-fixed-build.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - chessvision-ultra-v03/**
+      - .github/workflows/chessvision-fixed-build.yml
   workflow_dispatch:
 
 permissions:
