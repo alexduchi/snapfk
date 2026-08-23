@@ -1,0 +1,24 @@
+name: ChessVision v0.9 Resplit APK
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/chessvision-v09-resplit.yml]
+permissions:
+  contents: write
+jobs:
+  resplit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/chessvision-ultra-v03b-20260823
+      - run: |
+          set -euo pipefail
+          cat chessvision-ultra-v09-output/apk.part* > /tmp/apk.b64
+          rm -f chessvision-ultra-v09-output/small.part*
+          split -b 20000 -d -a 2 /tmp/apk.b64 chessvision-ultra-v09-output/small.part
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add chessvision-ultra-v09-output/small.part*
+          git commit -m 'Resplit ChessVision v0.9 APK for retrieval' || exit 0
+          git push origin HEAD:chatgpt/chessvision-ultra-v03b-20260823
