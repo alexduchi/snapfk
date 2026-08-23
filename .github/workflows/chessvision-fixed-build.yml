@@ -1,17 +1,17 @@
-name: ChessVision Ultra v0.6 APK
+name: ChessVision Ultra v0.7 APK
 
 on:
   push:
     branches:
       - chatgpt/chessvision-ultra-v03b-20260823
     paths:
-      - chessvision-ultra-v06/**
+      - chessvision-ultra-v07/**
       - .github/workflows/chessvision-fixed-build.yml
   pull_request:
     branches:
       - main
     paths:
-      - chessvision-ultra-v06/**
+      - chessvision-ultra-v07/**
       - .github/workflows/chessvision-fixed-build.yml
   workflow_dispatch:
 
@@ -38,8 +38,12 @@ jobs:
           base64 -d chessvision-ultra-v05/patch.b64 | gzip -dc > /tmp/v05.patch && patch -p1 -d /tmp/chessvision < /tmp/v05.patch
           base64 -d chessvision-ultra-v06/patch.b64 | gzip -dc > /tmp/v06.patch
           patch --batch -p1 -d /tmp/chessvision < /tmp/v06.patch || true
-          grep -q "versionName '0.6.0-dynamic-grid'" /tmp/chessvision/app/build.gradle
-          grep -q 'class ScreenMapper' /tmp/chessvision/app/src/main/java/fr/neo/chessvisionbot/core/ScreenMapper.java
+          base64 -d chessvision-ultra-v07/patch.b64 | gzip -dc > /tmp/v07.patch
+          echo '365bb137bed017ad7f327b39c85af40957e46d9c091294396ec8cfdb425be969  /tmp/v07.patch' | sha256sum -c -
+          patch -p1 -d /tmp/chessvision < /tmp/v07.patch
+          grep -q "versionName '0.7.0-stable-vision'" /tmp/chessvision/app/build.gradle
+          grep -q 'CAPTURE_MIN_INTERVAL_MS=1100L' /tmp/chessvision/app/src/main/java/fr/neo/chessvisionbot/ChessBotService.java
+          grep -q 'BAND_THRESHOLD = 0.20' /tmp/chessvision/app/src/main/java/fr/neo/chessvisionbot/core/FixedBoardDetector.java
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -70,10 +74,10 @@ jobs:
         run: |
           APK=/tmp/chessvision/app/build/outputs/apk/debug/app-debug.apk
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
-          mkdir -p deliverables && cp "$APK" deliverables/ChessVisionBot-Ultra-v0.6.apk
-          sha256sum deliverables/ChessVisionBot-Ultra-v0.6.apk > deliverables/SHA256SUMS.txt
+          mkdir -p deliverables && cp "$APK" deliverables/ChessVisionBot-Ultra-v0.7.apk
+          sha256sum deliverables/ChessVisionBot-Ultra-v0.7.apk > deliverables/SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: ChessVisionBot-Ultra-v0.6
+          name: ChessVisionBot-Ultra-v0.7
           path: deliverables/
           retention-days: 7
