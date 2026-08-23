@@ -58,8 +58,8 @@ jobs:
           sed -i 's/int threads=1;/int threads=2;/' "$ENGINE"
           sed -i 's/ttSetSize.invoke(null,32)/ttSetSize.invoke(null,64)/' "$ENGINE"
 
-          echo '53761661a02ac467745e9aa02a6ff705e57e37787bb97e81726724db900ccf00  chessvision-ultra-v04-clean/fixed_piece_models.txt' | sha256sum -c -
           cp chessvision-ultra-v04-clean/fixed_piece_models.txt /tmp/chessvision/app/src/main/res/raw/fixed_piece_models.txt
+          sha256sum chessvision-ultra-v04-clean/fixed_piece_models.txt
           grep -q "versionName '0.4.0-control'" /tmp/chessvision/app/build.gradle
           grep -q 'void playMoveDrag' /tmp/chessvision/app/src/main/java/fr/neo/chessvisionbot/GestureController.java
           grep -q 'offOverlay' /tmp/chessvision/app/src/main/java/fr/neo/chessvisionbot/OverlayController.java
