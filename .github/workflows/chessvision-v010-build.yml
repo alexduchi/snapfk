@@ -32,7 +32,7 @@ jobs:
           set -euo pipefail
           bash chessvision-ultra-v09/build_source_fixed.sh
           base64 -d chessvision-ultra-v010/patch.b64 | gzip -dc > /tmp/v010.patch
-          echo '285e8099509d73a376704a4ca853631c638fab4ab4c147baaf1cab4959ccd57e  /tmp/v010.patch' | sha256sum -c -
+          echo '4fdbcf9631d371ce0e09298a8aa767721f812074b106ee585dc9fa278692eeaf  /tmp/v010.patch' | sha256sum -c -
           patch --batch -p1 -d /tmp/chessvision < /tmp/v010.patch
           grep -q "versionName '0.10.0-start-guard'" /tmp/chessvision/app/build.gradle
           grep -q 'class StartupSynchronizer' /tmp/chessvision/app/src/main/java/fr/neo/chessvisionbot/core/StartupSynchronizer.java
