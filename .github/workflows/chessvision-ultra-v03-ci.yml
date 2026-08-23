@@ -1,0 +1,115 @@
+name: ChessVision Ultra v0.3 CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+
+      - name: Restore v0.2 and apply v0.3 patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat chessvision-fixed-build/payload/source.part00 \
+              chessvision-fixed-build/payload/source.part01 \
+              chessvision-fixed-build/payload/source.part02 \
+              chessvision-fixed-build/payload/source.part03 \
+              chessvision-fixed-build/payload/source.part04 \
+              chessvision-fixed-build/payload/source.part05 | tr -d '\r\n' | base64 -d > /tmp/chessvision.zip
+          echo 'c3245d2a05456134d485bced3e17ffce918b8dd93b829674639dd9d9ca293966  /tmp/chessvision.zip' | sha256sum -c -
+          rm -rf /tmp/chessvision && mkdir /tmp/chessvision
+          unzip -q /tmp/chessvision.zip -d /tmp/chessvision
+          base64 -d chessvision-ultra-v03/patch.b64 | gzip -dc > /tmp/v03.patch
+          echo '126e8036b258ecf2d18ce9f65091535261731d5076c15142692bed22fdd5b8a6  /tmp/v03.patch' | sha256sum -c -
+          patch -p1 -d /tmp/chessvision < /tmp/v03.patch
+          grep -q "versionName '0.3.0-ultra'" /tmp/chessvision/app/build.gradle
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Build Chess22k 1.14
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --depth 1 https://github.com/sandermvdb/chess22k.git /tmp/chess22k
+          cd /tmp/chess22k
+          mvn -q -DskipTests package
+          test -s target/chess22k-1.14.jar
+          mkdir -p /tmp/chessvision/app/libs
+          cp target/chess22k-1.14.jar /tmp/chessvision/app/libs/chess22k-1.14.jar
+
+      - name: Smoke-test ultra engine
+        working-directory: /tmp/chessvision
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/UltraEngineSmoke.java <<'JAVA'
+          import fr.neo.chessvisionbot.core.*;
+          public final class UltraEngineSmoke {
+            public static void main(String[] args) {
+              UltraChessEngine e=new UltraChessEngine();
+              if(!e.isUltraReady())throw new RuntimeException("Chess22k not loaded: "+e.backend());
+              ChessPosition p=ChessPosition.start();
+              Move m=e.bestMove(p,250);
+              if(m==null||!p.legalMoves().contains(m))throw new RuntimeException("invalid move "+m);
+              System.out.println("ULTRA_ENGINE_OK "+e.backend()+" move="+m.uci());
+            }
+          }
+          JAVA
+          rm -rf /tmp/coretest && mkdir /tmp/coretest
+          find app/src/main/java/fr/neo/chessvisionbot/core -name '*.java' -print0 | xargs -0 javac -cp app/libs/chess22k-1.14.jar -d /tmp/coretest
+          javac -cp "/tmp/coretest:app/libs/chess22k-1.14.jar" -d /tmp/coretest /tmp/UltraEngineSmoke.java
+          java -cp "/tmp/coretest:app/libs/chess22k-1.14.jar" UltraEngineSmoke
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android 35
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+
+      - name: Setup Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build debug APK
+        working-directory: /tmp/chessvision
+        run: gradle --no-daemon --stacktrace :app:assembleDebug
+
+      - name: Verify APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=/tmp/chessvision/app/build/outputs/apk/debug/app-debug.apk
+          test -s "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | head -n 8
+          mkdir -p deliverables
+          cp "$APK" deliverables/ChessVisionBot-Ultra-v0.3.apk
+          sha256sum deliverables/ChessVisionBot-Ultra-v0.3.apk > deliverables/SHA256SUMS.txt
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ChessVisionBot-Ultra-v0.3
+          path: |
+            deliverables/ChessVisionBot-Ultra-v0.3.apk
+            deliverables/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 7
