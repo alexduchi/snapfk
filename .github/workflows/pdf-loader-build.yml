@@ -40,7 +40,7 @@ jobs:
       - name: Decode source
         shell: bash
         run: |
-          cat pdf-loader-parts/part* > pdf-loader-source.tgz.b64
+          cat pdf-loader-parts/part00 pdf-loader-parts/part01 pdf-loader-parts/part02 pdf-loader-parts/part03 pdf-loader-parts/part04 pdf-loader-parts/part05 > pdf-loader-source.tgz.b64
           base64 -d pdf-loader-source.tgz.b64 > pdf-loader-project.tgz
           tar -xzf pdf-loader-project.tgz
 
