@@ -3,6 +3,8 @@ name: Image Toolbox CI
 on:
   push:
     branches: [ci-image-toolbox-20260824]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 jobs:
