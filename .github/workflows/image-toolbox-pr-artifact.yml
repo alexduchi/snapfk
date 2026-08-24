@@ -22,7 +22,23 @@ jobs:
       - name: Reconstruct source
         run: |
           set -euo pipefail
-          cat ci/image-toolbox/source.part.* | base64 -d > ImageToolbox-source.zip
+          cat \
+            ci/image-toolbox/source.part.00 \
+            ci/image-toolbox/source.part.01 \
+            ci/image-toolbox/source.part.02 \
+            ci/image-toolbox/source.part.03a \
+            ci/image-toolbox/source.part.03b0 \
+            ci/image-toolbox/source.part.03f0 \
+            ci/image-toolbox/source.part.03f1 \
+            ci/image-toolbox/source.part.03d1 \
+            ci/image-toolbox/source.part.03d2 \
+            ci/image-toolbox/source.part.03d3 \
+            ci/image-toolbox/source.part.03d4 \
+            ci/image-toolbox/source.part.03d5 \
+            ci/image-toolbox/source.part.03d6 \
+            ci/image-toolbox/source.part.04 \
+            | base64 -d > ImageToolbox-source.zip
+          echo '934d7684c37907505921b66d5d87e8e685388b0acb34db5cb9a3ddd4ed04f4e0  ImageToolbox-source.zip' | sha256sum -c -
           unzip -q ImageToolbox-source.zip
           chmod +x ImageToolboxProject/build.sh
       - name: Build APK
