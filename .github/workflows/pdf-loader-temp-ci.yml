@@ -1,0 +1,71 @@
+name: Pdf Loader Temporary APK Build
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/pdf-loader-temp-ci.yml]
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: pdf-loader-build-20260824
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install Android SDK
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Reconstruct source
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/pdf-loader-project
+          base64 -d pdf-loader-source.tgz.b64 > /tmp/pdf-loader-project.tgz
+          tar -xzf /tmp/pdf-loader-project.tgz -C /tmp
+          test -f /tmp/pdf-loader-project/app/build.gradle
+      - name: Build APK
+        working-directory: /tmp/pdf-loader-project
+        run: gradle --no-daemon :app:assembleDebug --stacktrace
+      - name: Verify APK
+        working-directory: /tmp/pdf-loader-project
+        run: "$ANDROID_HOME/build-tools/35.0.0/apksigner verify --verbose app/build/outputs/apk/debug/app-debug.apk"
+      - name: Export APK
+        if: success()
+        run: |
+          set -euo pipefail
+          APK=/tmp/pdf-loader-project/app/build/outputs/apk/debug/app-debug.apk
+          git fetch origin pdf-loader-build-20260824
+          git reset --hard origin/pdf-loader-build-20260824
+          mkdir -p pdf-loader-output
+          rm -f pdf-loader-output/apk.part* pdf-loader-output/SHA256.txt pdf-loader-output/APK_SIZE.txt
+          sha256sum "$APK" | awk '{print $1}' > pdf-loader-output/SHA256.txt
+          stat -c %s "$APK" > pdf-loader-output/APK_SIZE.txt
+          base64 -w0 "$APK" > /tmp/pdfloader-apk.b64
+          split -b 60000 -d -a 3 /tmp/pdfloader-apk.b64 pdf-loader-output/apk.part
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add pdf-loader-output
+          git commit -m 'Export Pdf Loader APK' || true
+          git push origin HEAD:pdf-loader-build-20260824
+      - name: Export build status
+        if: always()
+        run: |
+          set +e
+          git fetch origin pdf-loader-build-20260824
+          git reset --hard origin/pdf-loader-build-20260824
+          mkdir -p pdf-loader-output
+          printf '%s\n' '${{ job.status }}' > pdf-loader-output/build-status.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add pdf-loader-output/build-status.txt
+          git commit -m 'Pdf Loader build status' || exit 0
+          git push origin HEAD:pdf-loader-build-20260824
