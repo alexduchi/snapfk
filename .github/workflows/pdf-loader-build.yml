@@ -60,3 +60,5 @@ jobs:
           name: PdfLoader-v0.1-debug
           path: out/
           if-no-files-found: error
+
+# Pdf Loader CI trigger
