@@ -1,0 +1,39 @@
+name: Black Box Android Build
+
+on:
+  push:
+    branches: [ chatgpt-black-box-build ]
+    paths: [ RUN_BLACKBOX_BUILD ]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unpack project
+        run: |
+          cat blackbox-src.tar.gz.b64.part* | base64 -d > blackbox-src.tar.gz
+          mkdir -p blackbox-project
+          tar -xzf blackbox-src.tar.gz -C blackbox-project
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install Android SDK
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Build debug APK
+        working-directory: blackbox-project
+        run: gradle :app:assembleDebug --stacktrace --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BlackBox-APK
+          path: blackbox-project/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
