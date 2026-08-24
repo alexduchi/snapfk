@@ -1,1 +1,1 @@
-trigger 2026-08-25 rebuild-3
+trigger 2026-08-25 compiler-log-1
