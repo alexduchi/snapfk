@@ -5,13 +5,13 @@ on:
     branches:
       - pdf-loader-build-20260824
     paths:
-      - 'pdf-loader-source.tgz.b64'
+      - 'pdf-loader-parts/**'
       - '.github/workflows/pdf-loader-build.yml'
   pull_request:
     branches:
       - main
     paths:
-      - 'pdf-loader-source.tgz.b64'
+      - 'pdf-loader-parts/**'
       - '.github/workflows/pdf-loader-build.yml'
   workflow_dispatch:
 
@@ -40,6 +40,7 @@ jobs:
       - name: Decode source
         shell: bash
         run: |
+          cat pdf-loader-parts/part* > pdf-loader-source.tgz.b64
           base64 -d pdf-loader-source.tgz.b64 > pdf-loader-project.tgz
           tar -xzf pdf-loader-project.tgz
 
