@@ -1,9 +1,8 @@
 name: Black Box Android Build
 
 on:
-  push:
-    branches: [ chatgpt-black-box-build ]
-    paths: [ RUN_BLACKBOX_BUILD ]
+  pull_request:
+    branches: [ main ]
 
 permissions:
   contents: read
