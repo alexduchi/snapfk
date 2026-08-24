@@ -42,8 +42,23 @@ jobs:
           echo '934d7684c37907505921b66d5d87e8e685388b0acb34db5cb9a3ddd4ed04f4e0  ImageToolbox-source.zip' | sha256sum -c -
           unzip -q ImageToolbox-source.zip
           chmod +x ImageToolboxProject/build.sh
-      - name: Build APK
-        run: bash ImageToolboxProject/build.sh
+      - name: Build APK and capture log
+        run: |
+          set +e
+          bash ImageToolboxProject/build.sh > build.log 2>&1
+          status=$?
+          echo "$status" > build.status
+          cat build.log
+          exit 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ImageToolbox-build-log
+          if-no-files-found: error
+          path: |
+            build.log
+            build.status
+      - name: Enforce build result
+        run: test "$(cat build.status)" = "0"
       - name: Collect
         run: |
           set -euo pipefail
