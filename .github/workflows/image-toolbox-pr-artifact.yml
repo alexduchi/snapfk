@@ -41,6 +41,7 @@ jobs:
             | base64 -d > ImageToolbox-source.zip
           echo '934d7684c37907505921b66d5d87e8e685388b0acb34db5cb9a3ddd4ed04f4e0  ImageToolbox-source.zip' | sha256sum -c -
           unzip -q ImageToolbox-source.zip
+          sed -i '/postSplashScreenTheme/d' ImageToolboxProject/res/values-v31/styles.xml ImageToolboxProject/res/values-night-v31/styles.xml
           chmod +x ImageToolboxProject/build.sh
       - name: Build APK and capture log
         run: |
