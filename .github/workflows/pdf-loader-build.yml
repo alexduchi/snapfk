@@ -7,6 +7,12 @@ on:
     paths:
       - 'pdf-loader-source.tgz.b64'
       - '.github/workflows/pdf-loader-build.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'pdf-loader-source.tgz.b64'
+      - '.github/workflows/pdf-loader-build.yml'
   workflow_dispatch:
 
 jobs:
@@ -60,5 +66,3 @@ jobs:
           name: PdfLoader-v0.1-debug
           path: out/
           if-no-files-found: error
-
-# Pdf Loader CI trigger
