@@ -29,6 +29,67 @@ jobs:
       - name: Install Android platform and build tools
         run: yes | sdkmanager "platforms;android-35" "build-tools;35.0.1"
 
+      - name: Apply source compile fix
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('device-lab-ci/app/src/main/java/com/devicelab/app/MainActivity.java')
+          s=p.read_text()
+          start=s.index('    private void startMic(){')
+          end=s.index('    private void stopMic(){', start)
+          new='''    private void startMic(){
+              if(checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED){
+                  requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO},REQ_MIC);
+                  return;
+              }
+              if(micRunning)return;
+              try{
+                  final int rate=16000;
+                  int min=AudioRecord.getMinBufferSize(rate,AudioFormat.CHANNEL_IN_MONO,AudioFormat.ENCODING_PCM_16BIT);
+                  if(min<=0)min=4096;
+                  audioRecord=new AudioRecord(MediaRecorder.AudioSource.MIC,rate,AudioFormat.CHANNEL_IN_MONO,AudioFormat.ENCODING_PCM_16BIT,Math.max(min,4096));
+                  if(audioRecord.getState()!=AudioRecord.STATE_INITIALIZED){
+                      audioRecord.release();
+                      audioRecord=null;
+                      Toast.makeText(this,"Micro non initialisable",Toast.LENGTH_LONG).show();
+                      return;
+                  }
+                  micRunning=true;
+                  audioRecord.startRecording();
+                  micThread=new Thread(new Runnable(){
+                      @Override public void run(){
+                          short[] buf=new short[1024];
+                          while(micRunning&&audioRecord!=null){
+                              int n=audioRecord.read(buf,0,buf.length);
+                              if(n>0){
+                                  double sum=0;
+                                  for(int i=0;i<n;i++){
+                                      double sample=buf[i]/32768.0;
+                                      sum+=sample*sample;
+                                  }
+                                  double rms=Math.sqrt(sum/n);
+                                  final double db=rms>0?20*Math.log10(rms):-120;
+                                  final int meter=(int)Math.max(0,Math.min(100,(db+80)*1.25));
+                                  ui.post(new Runnable(){
+                                      @Override public void run(){
+                                          if(micValue!=null)micValue.setText(String.format(Locale.ROOT,"%.1f dBFS",db));
+                                          if(micMeter!=null)micMeter.setProgress(meter);
+                                      }
+                                  });
+                              }
+                          }
+                      }
+                  },"DeviceLabMic");
+                  micThread.start();
+              }catch(Exception e){
+                  micRunning=false;
+                  Toast.makeText(this,"Micro indisponible: "+e.getClass().getSimpleName(),Toast.LENGTH_LONG).show();
+              }
+          }
+          '''
+          p.write_text(s[:start]+new+s[end:])
+          PY
+
       - name: Build Device Lab
         run: |
           chmod +x device-lab-ci/build.sh
