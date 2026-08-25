@@ -1,0 +1,101 @@
+name: Image Toolbox Crash Logger
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install build SDK
+        run: |
+          yes | sdkmanager --licenses >/dev/null 2>&1 || true
+          sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+      - name: Rebuild delivered source
+        run: |
+          set -euo pipefail
+          cat \
+            ci/image-toolbox/source.part.00 \
+            ci/image-toolbox/source.part.01 \
+            ci/image-toolbox/source.part.02 \
+            ci/image-toolbox/source.part.03a \
+            ci/image-toolbox/source.part.03b0 \
+            ci/image-toolbox/source.part.03e0 \
+            ci/image-toolbox/source.part.03f0 \
+            ci/image-toolbox/source.part.03f1 \
+            ci/image-toolbox/source.part.03d1 \
+            ci/image-toolbox/source.part.03d2 \
+            ci/image-toolbox/source.part.03d3 \
+            ci/image-toolbox/source.part.03d4 \
+            ci/image-toolbox/source.part.03d5 \
+            ci/image-toolbox/source.part.03d6 \
+            ci/image-toolbox/source.part.04 | base64 -d > source.zip
+          unzip -q source.zip -d srcwork
+          cd srcwork
+          sed -i '/postSplashScreenTheme/d' res/values-v31/styles.xml res/values-night-v31/styles.xml
+          sed -i 's/public static View divider(Context c)/public static View dividerView(Context c)/' src/com/imagetoolbox/app/Ui.java
+          sed -i 's/,ExifInterface.TAG_GPS_DIRECTION_MAGNETIC//' src/com/imagetoolbox/app/ImageUtils.java
+          sed -i 's/ExifInterface.TAG_PHOTOGRAPHIC_SENSITIVITY/"ISOSpeedRatings"/g' src/com/imagetoolbox/app/ImageUtils.java
+          sed -i 's/ExifInterface.TAG_LENS_MAKE/"LensMake"/g' src/com/imagetoolbox/app/ImageUtils.java
+          sed -i 's/ExifInterface.TAG_LENS_MODEL/"LensModel"/g' src/com/imagetoolbox/app/ImageUtils.java
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('AndroidManifest.xml')
+          s=p.read_text()
+          s=s.replace('android:theme="@style/AppTheme.Splash"','android:theme="@style/AppTheme"')
+          p.write_text(s)
+          p=Path('src/com/imagetoolbox/app/MainActivity.java')
+          s=p.read_text()
+          s=s.replace('try{setContentView(build());}catch(Throwable t){setContentView(buildSafeFallback());}', 'try{setContentView(build());}catch(Throwable t){try{setContentView(buildSafeFallback());}catch(Throwable ignored){TextView tv=new TextView(this);tv.setText("Image Toolbox");tv.setPadding(32,64,32,32);setContentView(tv);}}')
+          p.write_text(s)
+          PY
+          chmod +x build.sh
+          ./build.sh
+          cp build/ImageToolbox.apk ../ImageToolbox.apk
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm || true
+      - uses: reactivecircus/android-emulator-runner@v2
+        continue-on-error: true
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: |
+            set +e
+            mkdir -p runtime-out
+            adb install -r ImageToolbox.apk > runtime-out/install.txt 2>&1
+            adb logcat -c
+            adb shell am force-stop com.imagetoolbox.app
+            adb shell am start -W -n com.imagetoolbox.app/.MainActivity > runtime-out/start.txt 2>&1
+            sleep 5
+            adb shell pidof com.imagetoolbox.app > runtime-out/pid.txt 2>&1
+            adb logcat -d -v threadtime > runtime-out/logcat.txt 2>&1
+            adb shell dumpsys activity top > runtime-out/top.txt 2>&1
+            grep -n -A120 -B30 -E 'FATAL EXCEPTION|AndroidRuntime|Process: com.imagetoolbox.app|Unable to start activity|imagetoolbox' runtime-out/logcat.txt > runtime-out/crash.txt || true
+            cat runtime-out/install.txt || true
+            cat runtime-out/start.txt || true
+            echo PID=$(cat runtime-out/pid.txt 2>/dev/null || true)
+            cat runtime-out/crash.txt || true
+            exit 0
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ImageToolbox-runtime-log
+          path: |
+            runtime-out/
+            ImageToolbox.apk
+          if-no-files-found: warn
