@@ -29,15 +29,10 @@ jobs:
       - name: Install Android platform and build tools
         run: yes | sdkmanager "platforms;android-35" "build-tools;35.0.1"
 
-      - name: Extract Device Lab source
-        run: |
-          mkdir -p device-lab-ci/project
-          unzip -q device-lab-ci/project.zip -d device-lab-ci/project
-
       - name: Build Device Lab
         run: |
-          chmod +x device-lab-ci/project/build.sh
-          device-lab-ci/project/build.sh
+          chmod +x device-lab-ci/build.sh
+          device-lab-ci/build.sh
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
@@ -45,5 +40,5 @@ jobs:
           name: DeviceLab-v4-native
           if-no-files-found: error
           path: |
-            device-lab-ci/project/dist/DeviceLab-v4.0.apk
-            device-lab-ci/project/dist/DeviceLab-v4.0.apk.sha256
+            device-lab-ci/dist/DeviceLab-v4.0.apk
+            device-lab-ci/dist/DeviceLab-v4.0.apk.sha256
