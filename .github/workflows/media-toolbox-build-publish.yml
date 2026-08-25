@@ -1,0 +1,75 @@
+name: Build and publish Media Toolbox APK
+
+on:
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    if: github.head_ref == 'chatgpt/media-toolbox-build-20260825'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Android packages
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager 'platforms;android-37' 'build-tools;36.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.5.0'
+      - name: Reconstruct and validate source
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat \
+            ci/media-toolbox/source.part.00 ci/media-toolbox/source.part.01 \
+            ci/media-toolbox/source.part.02 ci/media-toolbox/source.part.03 \
+            ci/media-toolbox/source.part.04 ci/media-toolbox/source.part.05 \
+            ci/media-toolbox/source.part.06 ci/media-toolbox/source.part.07 \
+            ci/media-toolbox/source.part.08 \
+            ci/media-toolbox/fix09.0 ci/media-toolbox/fix09.1 \
+            ci/media-toolbox/fix10.0 ci/media-toolbox/good10b.0 ci/media-toolbox/good10b.1 \
+            ci/media-toolbox/good11.0 ci/media-toolbox/good11.1 ci/media-toolbox/good11.2 \
+            ci/media-toolbox/good12.0 ci/media-toolbox/good12.1 ci/media-toolbox/good12.2 \
+            > source.partial.b64
+          base64 --decode --ignore-garbage source.partial.b64 > source.partial.zip
+          zip -FF source.partial.zip --out source.repaired.zip
+          unzip -t source.repaired.zip
+          unzip -q source.repaired.zip
+          python3 MediaToolbox/tools/validate_project.py
+      - name: Build APK
+        working-directory: MediaToolbox
+        run: gradle --no-daemon --stacktrace :app:assembleDebug
+      - name: Verify APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ci/media-toolbox/result
+          cp MediaToolbox/app/build/outputs/apk/debug/app-debug.apk ci/media-toolbox/result/MediaToolbox.apk
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs ci/media-toolbox/result/MediaToolbox.apk | tee ci/media-toolbox/result/APK_VERIFY.txt
+          "$ANDROID_HOME/build-tools/36.0.0/aapt2" dump badging ci/media-toolbox/result/MediaToolbox.apk | tee ci/media-toolbox/result/APK_BADGING.txt
+          unzip -t ci/media-toolbox/result/MediaToolbox.apk > ci/media-toolbox/result/APK_ZIP_TEST.txt
+          sha256sum ci/media-toolbox/result/MediaToolbox.apk | tee ci/media-toolbox/result/MediaToolbox-apk.sha256
+          base64 -w 0 ci/media-toolbox/result/MediaToolbox.apk > ci/media-toolbox/result/MediaToolbox.apk.b64
+          rm ci/media-toolbox/result/MediaToolbox.apk
+      - name: Publish verified result to temporary branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add ci/media-toolbox/result
+          git commit -m 'Media Toolbox verified APK [skip ci]'
+          git push origin HEAD:${GITHUB_HEAD_REF}
