@@ -1,0 +1,106 @@
+name: Device Lab 4.0.1 Publish
+
+on:
+  push:
+    branches:
+      - device-lab-build-20260825
+    paths:
+      - 'device-lab-ci/patch_v401.py'
+      - '.github/workflows/device-lab-v401-publish.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-test-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK parts
+        run: yes | sdkmanager "platforms;android-35" "build-tools;35.0.1" "system-images;android-35;google_apis;x86_64"
+
+      - name: Apply battery-only patch
+        run: python3 device-lab-ci/patch_v401.py
+
+      - name: Build
+        run: |
+          chmod +x device-lab-ci/build.sh
+          device-lab-ci/build.sh
+          cp device-lab-ci/dist/DeviceLab-v4.0.apk device-lab-ci/dist/DeviceLab-v4.0.1.apk
+          sha256sum device-lab-ci/dist/DeviceLab-v4.0.1.apk > device-lab-ci/dist/DeviceLab-v4.0.1.apk.sha256
+
+      - name: Android 15 Battery smoke test
+        run: |
+          echo no | avdmanager create avd -n devlab_api35 -k "system-images;android-35;google_apis;x86_64" --force
+          "$ANDROID_SDK_ROOT/emulator/emulator" -avd devlab_api35 -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect > /tmp/devlab-emulator.log 2>&1 &
+          adb wait-for-device
+          for i in $(seq 1 120); do
+            [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ] && break
+            sleep 2
+          done
+          [ "$(adb shell getprop sys.boot_completed | tr -d '\r')" = "1" ]
+          adb install -r device-lab-ci/dist/DeviceLab-v4.0.1.apk
+          adb logcat -c
+          adb shell am force-stop com.devicelab.app
+          adb shell am start -W -n com.devicelab.app/.MainActivity
+          sleep 2
+          adb shell uiautomator dump /sdcard/devlab.xml >/dev/null
+          adb pull /sdcard/devlab.xml /tmp/devlab.xml >/dev/null
+          read X Y <<EOF
+          $(python3 - <<'PY'
+          import re, xml.etree.ElementTree as ET
+          root=ET.parse('/tmp/devlab.xml').getroot()
+          for n in root.iter('node'):
+              if n.attrib.get('text')=='Battery':
+                  m=re.match(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]',n.attrib.get('bounds',''))
+                  if not m: continue
+                  x1,y1,x2,y2=map(int,m.groups())
+                  print((x1+x2)//2,(y1+y2)//2)
+                  break
+          else:
+              raise SystemExit('Battery tab not found')
+          PY
+          )
+          EOF
+          adb shell input tap "$X" "$Y"
+          sleep 4
+          adb shell dumpsys activity activities > /tmp/devlab-activities.txt
+          adb logcat -d > /tmp/devlab-logcat.txt
+          grep -F "com.devicelab.app/.MainActivity" /tmp/devlab-activities.txt
+          if grep -A30 -B5 -E "FATAL EXCEPTION|Process: com.devicelab.app" /tmp/devlab-logcat.txt; then
+            echo "Battery page crash detected" >&2
+            exit 1
+          fi
+          echo "BATTERY PAGE TEST PASS"
+
+      - name: Publish verified APK to branch
+        run: |
+          mkdir -p device-lab-ci/release
+          cp device-lab-ci/dist/DeviceLab-v4.0.1.apk device-lab-ci/release/DeviceLab-v4.0.1.apk
+          cp device-lab-ci/dist/DeviceLab-v4.0.1.apk.sha256 device-lab-ci/release/DeviceLab-v4.0.1.apk.sha256
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add device-lab-ci/release/DeviceLab-v4.0.1.apk device-lab-ci/release/DeviceLab-v4.0.1.apk.sha256
+          git commit -m "Publish verified Device Lab 4.0.1 battery fix [skip ci]"
+          git push
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DeviceLab-v4.0.1-battery-fix
+          path: |
+            device-lab-ci/dist/DeviceLab-v4.0.1.apk
+            device-lab-ci/dist/DeviceLab-v4.0.1.apk.sha256
