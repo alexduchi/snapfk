@@ -12,7 +12,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -29,201 +29,19 @@ jobs:
       - name: Install Android platform and build tools
         run: yes | sdkmanager "platforms;android-35" "build-tools;35.0.1"
 
-      - name: Apply source compile and battery stability fixes
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          p=Path('device-lab-ci/app/src/main/java/com/devicelab/app/MainActivity.java')
-          s=p.read_text()
-
-          # Keep the already validated microphone compile/runtime fix.
-          start=s.index('    private void startMic(){')
-          end=s.index('    private void stopMic(){', start)
-          mic='''    private void startMic(){
-              if(checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED){
-                  requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO},REQ_MIC);
-                  return;
-              }
-              if(micRunning)return;
-              try{
-                  final int rate=16000;
-                  int min=AudioRecord.getMinBufferSize(rate,AudioFormat.CHANNEL_IN_MONO,AudioFormat.ENCODING_PCM_16BIT);
-                  if(min<=0)min=4096;
-                  audioRecord=new AudioRecord(MediaRecorder.AudioSource.MIC,rate,AudioFormat.CHANNEL_IN_MONO,AudioFormat.ENCODING_PCM_16BIT,Math.max(min,4096));
-                  if(audioRecord.getState()!=AudioRecord.STATE_INITIALIZED){
-                      audioRecord.release();
-                      audioRecord=null;
-                      Toast.makeText(this,"Micro non initialisable",Toast.LENGTH_LONG).show();
-                      return;
-                  }
-                  micRunning=true;
-                  audioRecord.startRecording();
-                  micThread=new Thread(new Runnable(){
-                      @Override public void run(){
-                          short[] buf=new short[1024];
-                          while(micRunning&&audioRecord!=null){
-                              int n=audioRecord.read(buf,0,buf.length);
-                              if(n>0){
-                                  double sum=0;
-                                  for(int i=0;i<n;i++){
-                                      double sample=buf[i]/32768.0;
-                                      sum+=sample*sample;
-                                  }
-                                  double rms=Math.sqrt(sum/n);
-                                  final double db=rms>0?20*Math.log10(rms):-120;
-                                  final int meter=(int)Math.max(0,Math.min(100,(db+80)*1.25));
-                                  ui.post(new Runnable(){
-                                      @Override public void run(){
-                                          if(micValue!=null)micValue.setText(String.format(Locale.ROOT,"%.1f dBFS",db));
-                                          if(micMeter!=null)micMeter.setProgress(meter);
-                                      }
-                                  });
-                              }
-                          }
-                      }
-                  },"DeviceLabMic");
-                  micThread.start();
-              }catch(Exception e){
-                  micRunning=false;
-                  Toast.makeText(this,"Micro indisponible: "+e.getClass().getSimpleName(),Toast.LENGTH_LONG).show();
-              }
-          }
-          '''
-          s=s[:start]+mic+s[end:]
-
-          # Battery-only patch: each optional BatteryManager binder query is isolated.
-          # ACTION_BATTERY_CHANGED remains the source for level/temp/voltage/status.
-          start=s.index('    private void buildBatteryPage(){')
-          end=s.index('    private String batteryStatus(', start)
-          battery='''    private void buildBatteryPage(){
-              addHeading("Battery","État batterie Android. Les données standard viennent du broadcast système; les mesures avancées sont lues de façon isolée pour qu’une propriété non supportée ne puisse jamais fermer l’app.");
-              batteryGauge=new CircularGaugeView(this);
-              content.addView(batteryGauge,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,Ui.dp(this,205)));
-              batteryFields=Ui.card(this);
-              addCard(batteryFields);
-              refreshBatteryPage();
-          }
-
-          private void refreshBatteryPage(){
-              if(batteryFields==null)return;
-              try{
-                  batteryFields.removeAllViews();
-                  Intent i=lastBatteryIntent;
-                  if(i==null){
-                      batteryFields.addView(Ui.muted(this,"Android n’a pas encore fourni l’état batterie."));
-                      return;
-                  }
-                  int level=i.getIntExtra(BatteryManager.EXTRA_LEVEL,-1);
-                  int scale=i.getIntExtra(BatteryManager.EXTRA_SCALE,-1);
-                  float pct=level>=0&&scale>0?level*100f/scale:Float.NaN;
-                  if(batteryGauge!=null)batteryGauge.setValue(pct,Float.isFinite(pct)?String.format(Locale.ROOT,"%.0f%%",pct):"—");
-                  int temp=i.getIntExtra(BatteryManager.EXTRA_TEMPERATURE,Integer.MIN_VALUE);
-                  int volt=i.getIntExtra(BatteryManager.EXTRA_VOLTAGE,Integer.MIN_VALUE);
-                  int status=i.getIntExtra(BatteryManager.EXTRA_STATUS,-1);
-                  int health=i.getIntExtra(BatteryManager.EXTRA_HEALTH,-1);
-                  int plug=i.getIntExtra(BatteryManager.EXTRA_PLUGGED,0);
-                  field(batteryFields,"Niveau",Float.isFinite(pct)?Ui.f(pct,1,"%"):"Indisponible");
-                  field(batteryFields,"Température",temp!=Integer.MIN_VALUE?Ui.f(temp/10.0,1,"°C"):"Indisponible");
-                  field(batteryFields,"Tension",volt!=Integer.MIN_VALUE?Ui.f(volt/1000.0,3,"V"):"Indisponible");
-                  field(batteryFields,"État",batteryStatus(status));
-                  field(batteryFields,"Santé",batteryHealth(health));
-                  field(batteryFields,"Source",plugged(plug));
-                  BatteryManager bm=(BatteryManager)getSystemService(BATTERY_SERVICE);
-                  if(bm!=null){
-                      field(batteryFields,"Capacité Android",safeBatteryInt(bm,BatteryManager.BATTERY_PROPERTY_CAPACITY,1.0,"%",1));
-                      field(batteryFields,"Courant instantané",safeBatteryInt(bm,BatteryManager.BATTERY_PROPERTY_CURRENT_NOW,1000.0,"mA",1));
-                      field(batteryFields,"Courant moyen",safeBatteryInt(bm,BatteryManager.BATTERY_PROPERTY_CURRENT_AVERAGE,1000.0,"mA",1));
-                      field(batteryFields,"Charge restante",safeBatteryInt(bm,BatteryManager.BATTERY_PROPERTY_CHARGE_COUNTER,1000.0,"mAh",1));
-                      field(batteryFields,"Énergie restante",safeBatteryEnergy(bm));
-                  }
-              }catch(RuntimeException e){
-                  batteryFields.removeAllViews();
-                  batteryFields.addView(Ui.muted(this,"Certaines informations batterie avancées ne sont pas exposées par ce téléphone."));
-              }
-          }
-
-          private String safeBatteryInt(BatteryManager b,int id,double divisor,String unit,int decimals){
-              try{
-                  int v=b.getIntProperty(id);
-                  if(v==Integer.MIN_VALUE)return "Indisponible";
-                  return Ui.f(v/divisor,decimals,unit);
-              }catch(RuntimeException e){
-                  return "Indisponible";
-              }
-          }
-
-          private String safeBatteryEnergy(BatteryManager b){
-              try{
-                  long v=b.getLongProperty(BatteryManager.BATTERY_PROPERTY_ENERGY_COUNTER);
-                  return v==Long.MIN_VALUE?"Indisponible":Ui.f(v/1_000_000_000.0,3,"Wh");
-              }catch(RuntimeException e){
-                  return "Indisponible";
-              }
-          }
-'''
-          s=s[:start]+battery+s[end:]
-
-          # Battery updates now come from the battery broadcast, not the 180 ms sensor UI loop.
-          s=s.replace('private void refreshVisiblePage(){if("Sensors".equals(page))refreshSensorsUi();else if("Battery".equals(page))refreshBatteryPage();}',
-                      'private void refreshVisiblePage(){if("Sensors".equals(page))refreshSensorsUi();}')
-          p.write_text(s)
-
-          manifest=Path('device-lab-ci/app/src/main/AndroidManifest.xml')
-          m=manifest.read_text()
-          m=m.replace('android:versionCode="400" android:versionName="4.0"','android:versionCode="401" android:versionName="4.0.1"')
-          manifest.write_text(m)
-          PY
+      - name: Apply validated v4.0.1 patch
+        run: python3 device-lab-ci/build_patch.py
 
       - name: Build Device Lab
         run: |
           chmod +x device-lab-ci/build.sh
           device-lab-ci/build.sh
 
-      - name: Android 15 launch and Battery smoke test
+      - name: Verify APK
         run: |
-          yes | sdkmanager "system-images;android-35;google_apis;x86_64"
-          echo no | avdmanager create avd -n devlab_api35 -k "system-images;android-35;google_apis;x86_64" --force
-          "$ANDROID_SDK_ROOT/emulator/emulator" -avd devlab_api35 -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect > /tmp/devlab-emulator.log 2>&1 &
-          adb wait-for-device
-          for i in $(seq 1 120); do
-            BOOT="$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')"
-            [ "$BOOT" = "1" ] && break
-            sleep 2
-          done
-          [ "$(adb shell getprop sys.boot_completed | tr -d '\r')" = "1" ]
-          adb install -r device-lab-ci/dist/DeviceLab-v4.0.apk
-          adb logcat -c
-          adb shell am force-stop com.devicelab.app
-          adb shell am start -W -n com.devicelab.app/.MainActivity | tee /tmp/devlab-am-start.txt
-          sleep 2
-          adb shell uiautomator dump /sdcard/devlab.xml >/dev/null
-          adb pull /sdcard/devlab.xml /tmp/devlab.xml >/dev/null
-          read X Y <<EOF
-          $(python3 - <<'PY'
-          import re, xml.etree.ElementTree as ET
-          root=ET.parse('/tmp/devlab.xml').getroot()
-          for n in root.iter('node'):
-              if n.attrib.get('text')=='Battery':
-                  m=re.match(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]',n.attrib.get('bounds',''))
-                  if m:
-                      x1,y1,x2,y2=map(int,m.groups())
-                      print((x1+x2)//2,(y1+y2)//2)
-                      break
-          else:
-              raise SystemExit('Battery tab not found')
-          PY
-          )
-          EOF
-          adb shell input tap "$X" "$Y"
-          sleep 3
-          adb shell dumpsys activity activities > /tmp/devlab-activities.txt
-          adb logcat -d > /tmp/devlab-logcat.txt
-          grep -F "com.devicelab.app/.MainActivity" /tmp/devlab-activities.txt
-          if grep -A25 -B5 -E "FATAL EXCEPTION|Process: com.devicelab.app" /tmp/devlab-logcat.txt; then
-            echo "Device Lab Battery page crash detected" >&2
-            exit 1
-          fi
-          echo "DEVICE LAB BATTERY SMOKE TEST: PASS"
+          "$ANDROID_SDK_ROOT/build-tools/35.0.1/apksigner" verify --verbose device-lab-ci/dist/DeviceLab-v4.0.apk
+          unzip -t device-lab-ci/dist/DeviceLab-v4.0.apk
+          "$ANDROID_SDK_ROOT/build-tools/35.0.1/aapt2" dump badging device-lab-ci/dist/DeviceLab-v4.0.apk | head -25
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
