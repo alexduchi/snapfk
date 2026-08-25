@@ -5,7 +5,7 @@ s = p.read_text()
 
 s = s.replace('import android.content.ContentResolver;\n', 'import android.content.ContentResolver;\nimport android.content.ContentValues;\n')
 s = s.replace('import android.os.Bundle;\n', 'import android.os.Bundle;\nimport android.os.Environment;\n')
-s = s.replace('import android.provider.DocumentsContract;\n', 'import android.provider.MediaStore;\n')
+s = s.replace('import android.provider.DocumentsContract;\n', 'import android.provider.DocumentsContract;\nimport android.provider.MediaStore;\n')
 s = s.replace('    private static final int PICK_PDF_TO_IMAGES = 30;\n    private static final int PICK_OUTPUT_TREE = 31;\n', '    private static final int PICK_PDF_TO_IMAGES = 30;\n')
 s = s.replace('body.addView(sheetAction("image", "PDF → Images", v -> { d.dismiss(); pendingPdfForImages = currentPdf; pickOutputTree(); }));', 'body.addView(sheetAction("image", "PDF → Images", v -> { d.dismiss(); exportPdfPagesToGalleryAsync(currentPdf); }));')
 s = s.replace('''    private void pickOutputTree() {\n        Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);\n        startActivityForResult(i, PICK_OUTPUT_TREE);\n    }\n\n''', '')
