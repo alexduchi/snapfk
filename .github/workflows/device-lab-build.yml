@@ -1,0 +1,49 @@
+name: Device Lab Native Build
+
+on:
+  push:
+    branches:
+      - device-lab-build-20260825
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android platform and build tools
+        run: yes | sdkmanager "platforms;android-35" "build-tools;35.0.1"
+
+      - name: Extract Device Lab source
+        run: |
+          mkdir -p device-lab-ci/project
+          unzip -q device-lab-ci/project.zip -d device-lab-ci/project
+
+      - name: Build Device Lab
+        run: |
+          chmod +x device-lab-ci/project/build.sh
+          device-lab-ci/project/build.sh
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: DeviceLab-v4-native
+          if-no-files-found: error
+          path: |
+            device-lab-ci/project/dist/DeviceLab-v4.0.apk
+            device-lab-ci/project/dist/DeviceLab-v4.0.apk.sha256
