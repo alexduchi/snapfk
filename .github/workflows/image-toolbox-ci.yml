@@ -59,16 +59,32 @@ jobs:
           p=Path('src/com/imagetoolbox/app/MainActivity.java')
           s=p.read_text()
           s=s.replace('public class MainActivity extends BaseActivity {','public class MainActivity extends android.app.Activity {')
-          old='@Override protected void onCreate(Bundle b){super.onCreate(b);try{setContentView(build());}catch(Throwable t){setContentView(buildSafeFallback());}try{handleIncoming(getIntent());}catch(Throwable ignored){}}'
+          old='@Override protected void onCreate(Bundle b){super.onCreate(b);setContentView(build());handleIncoming(getIntent());}'
           new='''@Override protected void onCreate(Bundle b){
                   super.onCreate(b);
                   try { getWindow().setStatusBarColor(Ui.bg(this)); getWindow().setNavigationBarColor(Ui.bg(this)); } catch(Throwable ignored) {}
-                  try{setContentView(build());}catch(Throwable t){try{setContentView(buildSafeFallback());}catch(Throwable ignored){TextView tv=new TextView(this);tv.setText("Image Toolbox");tv.setTextSize(24);tv.setPadding(32,64,32,32);setContentView(tv);}}
-                  try{handleIncoming(getIntent());}catch(Throwable ignored){}
+                  try { setContentView(build()); }
+                  catch(Throwable t){
+                      try {
+                          LinearLayout root=new LinearLayout(this);
+                          root.setOrientation(LinearLayout.VERTICAL);
+                          root.setPadding(32,64,32,32);
+                          TextView tv=new TextView(this); tv.setText("Image Toolbox"); tv.setTextSize(24); root.addView(tv);
+                          TextView sub=new TextView(this); sub.setText("Démarrage sécurisé"); sub.setTextSize(15); root.addView(sub);
+                          Button pick=new Button(this); pick.setText("Choisir une image"); pick.setOnClickListener(v->pick(ImageUtils.OP_RESIZE)); root.addView(pick);
+                          setContentView(root);
+                      } catch(Throwable ignored) {
+                          TextView tv=new TextView(this);tv.setText("Image Toolbox");tv.setTextSize(24);tv.setPadding(32,64,32,32);setContentView(tv);
+                      }
+                  }
+                  try { handleIncoming(getIntent()); } catch(Throwable ignored) {}
               }'''
           if old not in s:
-              raise SystemExit('MainActivity onCreate pattern missing')
-          p.write_text(s.replace(old,new))
+              raise SystemExit('MainActivity original onCreate pattern missing')
+          s=s.replace(old,new)
+          s=s.replace('@Override protected void onResume(){super.onResume();refreshHistory();}', '@Override protected void onResume(){super.onResume();try{refreshHistory();}catch(Throwable ignored){}}')
+          s=s.replace('@Override protected void onNewIntent(Intent i){super.onNewIntent(i);setIntent(i);handleIncoming(i);}', '@Override protected void onNewIntent(Intent i){super.onNewIntent(i);setIntent(i);try{handleIncoming(i);}catch(Throwable ignored){}}')
+          p.write_text(s)
 
           Path('src/com/imagetoolbox/app/BaseActivity.java').write_text('''package com.imagetoolbox.app;
 
