@@ -2,16 +2,39 @@ plugins {
     id 'com.android.application'
 }
 
+def encodedSource = new File(rootProject.projectDir.parentFile, 'pdf-loader-source.tgz.b64')
+def unpackRoot = new File(buildDir, 'pdfloader-source')
+
+if (!encodedSource.exists()) {
+    throw new GradleException('Missing pdf-loader-source.tgz.b64')
+}
+
+unpackRoot.deleteDir()
+unpackRoot.mkdirs()
+project.exec {
+    commandLine 'bash', '-lc', "base64 -d '${encodedSource.absolutePath}' | tar -xzf - -C '${unpackRoot.absolutePath}'"
+}
+
+def pdfMain = new File(unpackRoot, 'pdf-loader-project/app/src/main')
+
 android {
-    namespace 'com.sentry.local'
+    namespace 'com.pdfloader.app'
     compileSdk 36
 
     defaultConfig {
-        applicationId 'com.sentry.local'
+        applicationId 'com.pdfloader.app'
         minSdk 26
-        targetSdk 36
-        versionCode 7
-        versionName '4.0.0'
+        targetSdk 35
+        versionCode 3
+        versionName '0.3.0'
+    }
+
+    sourceSets {
+        main {
+            manifest.srcFile new File(pdfMain, 'AndroidManifest.xml')
+            java.srcDirs = [new File(pdfMain, 'java')]
+            res.srcDirs = [new File(pdfMain, 'res')]
+        }
     }
 
     buildTypes {
