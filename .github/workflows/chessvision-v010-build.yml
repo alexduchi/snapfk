@@ -1,0 +1,114 @@
+name: ChessVision Ultra v0.10 START GUARD
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [chatgpt/chessvision-ultra-v03b-20260823]
+    paths:
+      - '.github/workflows/chessvision-v010-build.yml'
+      - 'chessvision-ultra-v010/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/chessvision-v010-build.yml'
+      - 'chessvision-ultra-v010/**'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/chessvision-ultra-v03b-20260823
+          fetch-depth: 0
+      - name: Reconstruct v0.9 source and apply v0.10
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash chessvision-ultra-v09/build_source_fixed.sh
+          cat chessvision-ultra-v010/parts/part00 chessvision-ultra-v010/parts/part01 chessvision-ultra-v010/parts/part02 chessvision-ultra-v010/parts/part03 chessvision-ultra-v010/parts/part04 | base64 -d | gzip -dc > /tmp/v010.patch
+          echo 'da65210201ab74dfe34ccc4900481828c22bcb8c9c4a3aa4263c5faaf598a538  /tmp/v010.patch' | sha256sum -c -
+          patch --batch -p1 -d /tmp/chessvision < /tmp/v010.patch || true
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('/tmp/chessvision/app/src/main/java/fr/neo/chessvisionbot/ChessBotService.java')
+          s=p.read_text()
+          if 'startupSynchronizer=new StartupSynchronizer()' not in s:
+              s=s.replace('    private boolean autoSideLocked=false;\n','    private boolean autoSideLocked=false;\n    private final StartupSynchronizer startupSynchronizer=new StartupSynchronizer();\n',1)
+          if 'private ChessPosition autoCandidatePosition' not in s:
+              anchor='    private int autoCandidateStable=0;\n'
+              if anchor not in s:
+                  raise SystemExit('autoCandidateStable declaration anchor missing')
+              s=s.replace(anchor,'    private int autoCandidateStable=0;\n    private ChessPosition autoCandidatePosition=null;\n    private long autoCandidateHash=Long.MIN_VALUE;\n    private long startupBeganAt=0L;\n    private int startupMisses=0;\n    private volatile long windowCaptureBackoffUntil=0L;\n',1)
+          marker='                        // One random vendor/API failure should not replace a good\n'
+          if 'windowCaptureBackoffUntil=now+15000L;' not in s.split(marker)[0][-900:]:
+              s=s.replace(marker,'                        if(isolated){\n                            windowCaptureBackoffUntil=now+15000L;\n                            captureFailureStreak=0;\n                            scheduleCapture(120);\n                            return;\n                        }\n'+marker,1)
+          old='                long now=SystemClock.uptimeMillis();\n                if(captureFailureStreak>=3'
+          new='                long now=SystemClock.uptimeMillis();\n                if(isolated){windowCaptureBackoffUntil=now+15000L;captureFailureStreak=0;scheduleCapture(120);return;}\n                if(captureFailureStreak>=3'
+          if old in s: s=s.replace(old,new,1)
+          p.write_text(s)
+          PY
+          rm -f /tmp/chessvision/app/src/main/java/fr/neo/chessvisionbot/ChessBotService.java.rej
+          grep -q "versionName '0.10.0-start-guard'" /tmp/chessvision/app/build.gradle
+          grep -q 'class StartupSynchronizer' /tmp/chessvision/app/src/main/java/fr/neo/chessvisionbot/core/StartupSynchronizer.java
+          grep -q 'startupSynchronizer=new StartupSynchronizer' /tmp/chessvision/app/src/main/java/fr/neo/chessvisionbot/ChessBotService.java
+          grep -q 'private ChessPosition autoCandidatePosition' /tmp/chessvision/app/src/main/java/fr/neo/chessvisionbot/ChessBotService.java
+          grep -q 'windowCaptureBackoffUntil' /tmp/chessvision/app/src/main/java/fr/neo/chessvisionbot/ChessBotService.java
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Compile core
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/chessvision
+          mkdir -p /tmp/cvclasses
+          find app/src/main/java/fr/neo/chessvisionbot/core -maxdepth 1 -name '*.java' ! -name 'UltraChessEngine.java' > /tmp/cv-sources
+          javac -d /tmp/cvclasses @/tmp/cv-sources
+      - name: Build Chess22k 1.14
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --depth 1 https://github.com/sandermvdb/chess22k.git /tmp/chess22k
+          cd /tmp/chess22k
+          mvn -q -DskipTests package
+          mkdir -p /tmp/chessvision/app/libs
+          cp target/chess22k-1.14.jar /tmp/chessvision/app/libs/chess22k-1.14.jar
+      - uses: android-actions/setup-android@v3
+      - name: Android SDK
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Build APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/chessvision
+          gradle --no-daemon :app:assembleDebug
+          mkdir -p "$GITHUB_WORKSPACE/chessvision-ultra-v010-release"
+          cp app/build/outputs/apk/debug/app-debug.apk "$GITHUB_WORKSPACE/chessvision-ultra-v010-release/ChessVisionBot-Ultra-v0.10.apk"
+          sha256sum "$GITHUB_WORKSPACE/chessvision-ultra-v010-release/ChessVisionBot-Ultra-v0.10.apk" | tee "$GITHUB_WORKSPACE/chessvision-ultra-v010-release/SHA256.txt"
+      - name: Publish APK to build branch
+        if: github.event_name != 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add chessvision-ultra-v010-release/ChessVisionBot-Ultra-v0.10.apk chessvision-ultra-v010-release/SHA256.txt
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'Publish ChessVision Ultra v0.10 APK'
+          git push origin HEAD:chatgpt/chessvision-ultra-v03b-20260823
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ChessVisionBot-Ultra-v0.10
+          path: chessvision-ultra-v010-release/ChessVisionBot-Ultra-v0.10.apk

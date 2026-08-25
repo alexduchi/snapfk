@@ -1,0 +1,47 @@
+name: Publish ChessVision Ultra v0.9 APK
+
+on:
+  push:
+    branches: [chatgpt/chessvision-ultra-v03b-20260823]
+    paths:
+      - .github/workflows/chessvision-v09-publish-apk.yml
+      - chessvision-ultra-v09-publish/**
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/chessvision-ultra-v03b-20260823
+          fetch-depth: 0
+      - name: Reassemble verified APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p chessvision-ultra-v09-release
+          cat chessvision-ultra-v09-output/apk.part00 \
+              chessvision-ultra-v09-output/apk.part01 \
+              chessvision-ultra-v09-output/apk.part02 \
+              chessvision-ultra-v09-output/apk.part03 \
+              chessvision-ultra-v09-output/apk.part04 \
+              chessvision-ultra-v09-output/apk.part05 \
+              chessvision-ultra-v09-output/apk.part06 | tr -d '\r\n' | base64 -d > chessvision-ultra-v09-release/ChessVisionBot-Ultra-v0.9.apk
+          echo '8f86017fab7d10534b7f4e2b7fe60f6934ba143cb1008aac24bf9f74255748ae  chessvision-ultra-v09-release/ChessVisionBot-Ultra-v0.9.apk' | sha256sum -c -
+      - name: Commit APK to build branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add chessvision-ultra-v09-release/ChessVisionBot-Ultra-v0.9.apk
+          if git diff --cached --quiet; then
+            echo 'APK already published.'
+            exit 0
+          fi
+          git commit -m 'Publish ChessVision Ultra v0.9 APK'
+          git push origin HEAD:chatgpt/chessvision-ultra-v03b-20260823

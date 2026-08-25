@@ -1,0 +1,125 @@
+rmRetryCount=1;confirmGood=confirmFail=0;confirmRetrying=true;
++            final Move retryMove=confirmMove;final BoardRect retryRect=boardScreenRect;
++            setStatus("Tap non pris • second essai en glisser "+retryMove.uci(),false);
++            main.post(()->gestures.playMoveDrag(retryMove,retryRect,config.whiteBottom,ok->{
++                confirmRetrying=false;
++                if(!ok){awaitingBotConfirm=false;setRunning(false);setStatus("Le glisser Android a été annulé • PAUSE",false);return;}
++                matcher.reset();scheduleCapture(380);
++            }));
++            return;
++        }
++        if(confirmFail>=5){
++            boolean promotion=confirmMove!=null&&confirmMove.promotion!='\0';awaitingBotConfirm=false;setRunning(false);
++            setStatus(promotion?"Promotion: sélectionne la dame puis START":"Tap + glisser refusés par le jeu • bot en pause",false);
++        }
+     }
+ 
+     private void handleOpponentTurn(VisualBoard v){
+diff --git a/app/src/main/java/fr/neo/chessvisionbot/GestureController.java b/app/src/main/java/fr/neo/chessvisionbot/GestureController.java
+index dcf0c2d..2a034af 100644
+--- a/app/src/main/java/fr/neo/chessvisionbot/GestureController.java
++++ b/app/src/main/java/fr/neo/chessvisionbot/GestureController.java
+@@ -5,24 +5,88 @@ import android.graphics.Path;
+ import android.os.Handler;
+ import fr.neo.chessvisionbot.core.*;
+ import java.util.Random;
++import java.util.concurrent.atomic.AtomicBoolean;
+ 
++/**
++ * Robust Android chess gesture controller.
++ *
++ * v0.4 deliberately dispatches source and destination as TWO independent
++ * accessibility gestures. A surprising number of boards ignore two strokes
++ * packed in one GestureDescription even though Android reports completion.
++ * A drag fallback is also exposed for boards that only accept drag/drop.
++ */
+ final class GestureController {
+     interface Callback { void done(boolean ok); }
+-    private final ChessBotService service;private final Random random=new Random();
+-    GestureController(ChessBotService s){service=s;}
++
++    private final ChessBotService service;
++    private final Handler main;
++    private final Random random=new Random();
++
++    GestureController(ChessBotService s){service=s;main=new Handler(s.getMainLooper());}
++
+     void playMove(Move m,BoardRect rect,boolean whiteBottom,Callback cb){
+-        float cell=rect.cell();float[]a=center(m.from,rect,whiteBottom),b=center(m.to,rect,whiteBottom);
+-        float jitter=cell*.075f;a[0]+=rand(jitter);a[1]+=rand(jitter);b[0]+=rand(jitter);b[1]+=rand(jitter);
+-        Path p1=new Path();p1.moveTo(a[0],a[1]);Path p2=new Path();p2.moveTo(b[0],b[1]);
+-        GestureDescription.Builder builder=new GestureDescription.Builder();
+-        builder.addStroke(new GestureDescription.StrokeDescription(p1,0,52));
+-        builder.addStroke(new GestureDescription.StrokeDescription(p2,125+random.nextInt(95),58));
+-        boolean accepted=service.dispatchGesture(builder.build(),new AccessibilityService.GestureResultCallback(){
+-            @Override public void onCompleted(GestureDescription g){cb.done(true);}
+-            @Override public void onCancelled(GestureDescription g){cb.done(false);}
+-        },new Handler(service.getMainLooper()));
+-        if(!accepted)cb.done(false);
++        final float cell=rect.cell();
++        final float[] a=center(m.from,rect,whiteBottom);
++        final float[] b=center(m.to,rect,whiteBottom);
++        // Keep the tap safely inside the square. v0.3 used 7.5%, which was
++        // unnecessarily large when the detected board was close to an inset.
++        final float jitter=cell*.025f;
++        a[0]+=rand(jitter);a[1]+=rand(jitter);
++        b[0]+=rand(jitter);b[1]+=rand(jitter);
++
++        tap(a[0],a[1],72+random.nextInt(35),ok1->{
++            if(!ok1){finish(cb,false);return;}
++            // Separate input transaction: lets the chess UI actually enter its
++            // "piece selected" state before the target square receives DOWN.
++            main.postDelayed(()->tap(b[0],b[1],76+random.nextInt(38),ok2->finish(cb,ok2)),
++                    105+random.nextInt(85));
++        });
++    }
++
++    void playMoveDrag(Move m,BoardRect rect,boolean whiteBottom,Callback cb){
++        final float cell=rect.cell();
++        final float[] a=center(m.from,rect,whiteBottom);
++        final float[] b=center(m.to,rect,whiteBottom);
++        final float jitter=cell*.018f;
++        a[0]+=rand(jitter);a[1]+=rand(jitter);
++        b[0]+=rand(jitter);b[1]+=rand(jitter);
++
++        Path p=new Path();
++        p.moveTo(a[0],a[1]);
++        // A real line, rather than teleporting from one tap to another, is
++        // accepted by drag-only chess boards.
++        p.lineTo((a[0]+b[0])*.5f,(a[1]+b[1])*.5f);
++        p.lineTo(b[0],b[1]);
++        GestureDescription.Builder gb=new GestureDescription.Builder();
++        gb.addStroke(new GestureDescription.StrokeDescription(p,0,260+random.nextInt(120)));
++        dispatch(gb.build(),cb);
+     }
++
++    private void tap(float x,float y,long duration,Callback cb){
++        Path p=new Path();p.moveTo(x,y);
++        GestureDescription.Builder gb=new GestureDescription.Builder();
++        gb.addStroke(new GestureDescription.StrokeDescription(p,0,duration));
++        dispatch(gb.build(),cb);
++    }
++
++    private void dispatch(GestureDescription g,Callback cb){
++        AtomicBoolean once=new AtomicBoolean(false);
++        AccessibilityService.GestureResultCallback result=new AccessibilityService.GestureResultCallback(){
++            @Override public void onCompleted(GestureDescription d){if(once.compareAndSet(false,true))cb.done(true);}
++            @Override public void onCancelled(GestureDescription d){if(once.compareAndSet(false,true))cb.done(false);}
++        };
++        boolean accepted=false;
++        try{accepted=service.dispatchGesture(g,result,main);}catch(Throwable ignored){}
++        if(!accepted && once.compareAndSet(false,true))cb.done(false);
++    }
++
++    private void finish(Callback cb,boolean ok){try{cb.done(ok);}catch(Throwable ignored){}}
+     private float rand(float v){return (random.nextFloat()*2f-1f)*v;}
+-    private float[] center(int chess,BoardRect r,boolean whiteBottom){int screen=whiteBottom?chess:63-chess;int row=screen/8,col=screen%8;float c=r.cell();return new float[]{r.left+(col+.5f)*c,r.top+(row+.5f)*c};}
++
++    /** ChessPosition indexes a8=0 ... h1=63. */
++    private float[] center(int chess,BoardRect r,boolean whiteBottom){
++        int screen=whiteBottom?chess:63-chess;
++        int row=screen/8,col=screen%8;float c=r.cell();
++        return new float[]{r.left+(col+.5f)*c,r.top+(row+.5f)*c};
++    }
+ }
+diff --git a/app/src/main/java/fr/neo/chessvisionbot/MainActivity.java b/app/src/main/java/fr/neo/chessvisionbot/

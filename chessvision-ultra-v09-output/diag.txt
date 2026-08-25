@@ -1,0 +1,105 @@
+recon=success
+chess=success
+core=failure
+--- reconstruct log ---
+patching file app/build.gradle
+patching file app/src/main/AndroidManifest.xml
+patching file app/src/main/java/fr/neo/chessvisionbot/ChessBotService.java
+patching file app/src/main/java/fr/neo/chessvisionbot/OverlayController.java
+patching file app/src/main/java/fr/neo/chessvisionbot/core/BotConfig.java
+patching file app/src/main/java/fr/neo/chessvisionbot/core/ChessPosition.java
+patching file app/src/main/java/fr/neo/chessvisionbot/core/FixedBoardDetector.java
+patching file app/src/main/java/fr/neo/chessvisionbot/core/UltraChessEngine.java
+patching file app/src/main/res/values/strings.xml
+patching file app/build.gradle
+patching file app/src/main/java/fr/neo/chessvisionbot/ChessBotService.java
+patching file app/src/main/java/fr/neo/chessvisionbot/GestureController.java
+patching file app/src/main/java/fr/neo/chessvisionbot/MainActivity.java
+patching file app/src/main/java/fr/neo/chessvisionbot/OverlayController.java
+patching file app/src/main/java/fr/neo/chessvisionbot/core/BotConfig.java
+patching file app/build.gradle
+patching file app/src/main/java/fr/neo/chessvisionbot/ChessBotService.java
+patching file app/src/main/java/fr/neo/chessvisionbot/GestureController.java
+patching file app/src/main/java/fr/neo/chessvisionbot/MainActivity.java
+patching file app/src/main/java/fr/neo/chessvisionbot/OverlayController.java
+patching file app/src/main/java/fr/neo/chessvisionbot/core/BotConfig.java
+can't find file to patch at input line 4
+Perhaps you used the wrong -p or --strip option?
+The text leading up to this was:
+--------------------------
+|diff -ruN '--exclude=build' '--exclude=.gradle' ./BUILD_STATUS.md /mnt/data/chessvision_v06_work/ChessVisionBotV03/BUILD_STATUS.md
+|--- ./BUILD_STATUS.md	2026-08-23 12:41:43.000000000 +0000
+|+++ /mnt/data/chessvision_v06_work/ChessVisionBotV03/BUILD_STATUS.md	2026-08-23 13:37:04.618371133 +0000
+--------------------------
+No file to patch.  Skipping patch.
+1 out of 1 hunk ignored
+can't find file to patch at input line 19
+Perhaps you used the wrong -p or --strip option?
+The text leading up to this was:
+--------------------------
+|diff -ruN '--exclude=build' '--exclude=.gradle' ./README.md /mnt/data/chessvision_v06_work/ChessVisionBotV03/README.md
+|--- ./README.md	2026-08-23 13:00:57.000000000 +0000
+|+++ /mnt/data/chessvision_v06_work/ChessVisionBotV03/README.md	2026-08-23 13:37:04.616816849 +0000
+--------------------------
+No file to patch.  Skipping patch.
+1 out of 1 hunk ignored
+patching file app/build.gradle
+patching file app/src/main/java/fr/neo/chessvisionbot/ChessBotService.java
+patching file app/src/main/java/fr/neo/chessvisionbot/MainActivity.java
+patching file app/src/main/java/fr/neo/chessvisionbot/OverlayController.java
+patching file app/src/main/java/fr/neo/chessvisionbot/core/ScreenMapper.java
+patching file core-test/ScreenMapperTest.java
+/tmp/v08.patch: OK
+patching file app/build.gradle
+patching file app/src/main/java/fr/neo/chessvisionbot/ChessBotService.java
+Hunk #2 succeeded at 37 (offset -3 lines).
+Hunk #3 succeeded at 50 (offset -3 lines).
+Hunk #4 succeeded at 90 (offset -3 lines).
+Hunk #5 succeeded at 285 (offset -24 lines).
+Hunk #6 succeeded at 364 (offset -24 lines).
+patching file app/src/main/java/fr/neo/chessvisionbot/GestureController.java
+patching file app/src/main/java/fr/neo/chessvisionbot/core/MoveConfirmationAnalyzer.java
+patching file core-test/MoveConfirmationTest.java
+/tmp/v09.patch: OK
+can't find file to patch at input line 4
+Perhaps you used the wrong -p or --strip option?
+The text leading up to this was:
+--------------------------
+|diff -ruN '--exclude=build' '--exclude=.gradle' cv08orig/BUILD_STATUS.md cv09/BUILD_STATUS.md
+|--- cv08orig/BUILD_STATUS.md	2026-08-23 15:57:54.000000000 +0000
+|+++ cv09/BUILD_STATUS.md	2026-08-23 16:43:33.828339891 +0000
+--------------------------
+No file to patch.  Skipping patch.
+1 out of 1 hunk ignored
+can't find file to patch at input line 13
+Perhaps you used the wrong -p or --strip option?
+The text leading up to this was:
+--------------------------
+|diff -ruN '--exclude=build' '--exclude=.gradle' cv08orig/README.md cv09/README.md
+|--- cv08orig/README.md	2026-08-23 15:57:54.000000000 +0000
+|+++ cv09/README.md	2026-08-23 16:43:33.828268945 +0000
+--------------------------
+No file to patch.  Skipping patch.
+1 out of 1 hunk ignored
+patching file app/build.gradle
+patching file app/src/main/java/fr/neo/chessvisionbot/ChessBotService.java
+Hunk #1 FAILED at 34.
+Hunk #2 succeeded at 60 (offset -3 lines).
+Hunk #3 succeeded at 80 (offset -3 lines).
+Hunk #4 succeeded at 90 (offset -3 lines).
+Hunk #5 succeeded at 232 (offset -24 lines).
+Hunk #6 succeeded at 292 (offset -24 lines).
+Hunk #7 succeeded at 358 (offset -24 lines).
+Hunk #8 succeeded at 404 (offset -24 lines).
+1 out of 8 hunks FAILED -- saving rejects to file app/src/main/java/fr/neo/chessvisionbot/ChessBotService.java.rej
+patching file app/src/main/java/fr/neo/chessvisionbot/MainActivity.java
+patching file app/src/main/java/fr/neo/chessvisionbot/OverlayController.java
+patching file core-test/AutoOrientationTest.java
+v0.9 code reconstruction verified
+--- chess log ---
+Cloning into '/tmp/chess22k'...
+--- core log ---
+SCREEN_MAPPER_OK
+Exception in thread "main" javax.imageio.IIOException: Can't read input file!
+	at java.desktop/javax.imageio.ImageIO.read(ImageIO.java:1308)
+	at AutoOrientationTest.main(AutoOrientationTest.java:12)

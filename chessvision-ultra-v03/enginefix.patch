@@ -1,0 +1,28 @@
+--- a/app/src/main/java/fr/neo/chessvisionbot/core/UltraChessEngine.java
++++ b/app/src/main/java/fr/neo/chessvisionbot/core/UltraChessEngine.java
+@@ -42,7 +42,7 @@
+             // enough for a phone. Chess22k handles its own SMP worker pool.
+             try{
+                 Method setThreads=uciOptions.getMethod("setThreadCount",int.class);
+-                int threads=Math.max(1,Math.min(2,Runtime.getRuntime().availableProcessors()));
++                int threads=1;
+                 setThreads.invoke(null,threads);
+             }catch(Throwable ignored){}
+ 
+@@ -59,14 +59,14 @@
+ 
+             board=getBoard.invoke(null,0);
+             threadData=getThreadData.invoke(null,0);
+-            ttInit.invoke(null,false);
+             if(ttSetSize!=null)ttSetSize.invoke(null,32);
++            ttInit.invoke(null,true);
+             try{
+                 Class<?> uo=Class.forName("nl.s22k.chess.engine.UciOut");
+                 Field noOutput=uo.getField("noOutput");
+                 noOutput.setBoolean(null,true);
+             }catch(Throwable ignored){}
+-            ready=true;backend="Chess22k 1.14 / 2T";
++            ready=true;backend="Chess22k 1.14";
+         }catch(Throwable t){
+             ready=false;backend="fallback";
+         }
