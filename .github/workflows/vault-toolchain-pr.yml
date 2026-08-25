@@ -1,0 +1,40 @@
+name: Vault Android Toolchain PR
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  package-toolchain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install Android SDK 36
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+      - name: Package exact toolchain
+        run: |
+          set -euo pipefail
+          mkdir -p out/android-sdk/build-tools out/android-sdk/platforms/android-36
+          cp -a "$ANDROID_HOME/build-tools/36.0.0" out/android-sdk/build-tools/
+          cp "$ANDROID_HOME/platforms/android-36/android.jar" out/android-sdk/platforms/android-36/android.jar
+          test -x out/android-sdk/build-tools/36.0.0/aapt2
+          test -x out/android-sdk/build-tools/36.0.0/d8
+          test -x out/android-sdk/build-tools/36.0.0/zipalign
+          test -x out/android-sdk/build-tools/36.0.0/apksigner
+          test -s out/android-sdk/platforms/android-36/android.jar
+          tar -C out -czf vault-android-sdk36-toolchain.tar.gz android-sdk
+          sha256sum vault-android-sdk36-toolchain.tar.gz > vault-android-sdk36-toolchain.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vault-android-sdk36-toolchain
+          path: |
+            vault-android-sdk36-toolchain.tar.gz
+            vault-android-sdk36-toolchain.sha256
+          if-no-files-found: error
