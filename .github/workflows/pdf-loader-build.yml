@@ -5,13 +5,13 @@ on:
     branches:
       - pdf-loader-build-20260824
     paths:
-      - 'pdf-loader-parts/**'
+      - 'pdf-loader-source.tgz.b64'
       - '.github/workflows/pdf-loader-build.yml'
   pull_request:
     branches:
       - main
     paths:
-      - 'pdf-loader-parts/**'
+      - 'pdf-loader-source.tgz.b64'
       - '.github/workflows/pdf-loader-build.yml'
   workflow_dispatch:
 
@@ -40,8 +40,7 @@ jobs:
       - name: Decode source
         shell: bash
         run: |
-          cat pdf-loader-parts/part00 pdf-loader-parts/part01 pdf-loader-parts/part02 pdf-loader-parts/part03 pdf-loader-parts/part04 pdf-loader-parts/part05 > pdf-loader-source-v04.tgz.b64
-          base64 -d pdf-loader-source-v04.tgz.b64 > pdf-loader-project.tgz
+          base64 -d pdf-loader-source.tgz.b64 > pdf-loader-project.tgz
           tar -xzf pdf-loader-project.tgz
 
       - name: Install Android platform
@@ -58,18 +57,18 @@ jobs:
         shell: bash
         run: |
           mkdir -p out
-          cp pdf-loader-project/app/build/outputs/apk/debug/app-debug.apk out/PdfLoader-v0.4-debug.apk
-          sha256sum out/PdfLoader-v0.4-debug.apk | tee out/SHA256.txt
+          cp pdf-loader-project/app/build/outputs/apk/debug/app-debug.apk out/PdfLoader-v0.4.1-debug.apk
+          sha256sum out/PdfLoader-v0.4.1-debug.apk | tee out/SHA256.txt
 
       - name: Verify APK signature
         shell: bash
         run: |
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose out/PdfLoader-v0.4-debug.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose out/PdfLoader-v0.4.1-debug.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: PdfLoader-v0.4-debug
+          name: PdfLoader-v0.4.1-debug
           path: out/
           if-no-files-found: error
 
