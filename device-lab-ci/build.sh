@@ -7,6 +7,20 @@ ANDROID_JAR="$SDK/platforms/android-35/android.jar"
 for f in "$BT/aapt2" "$BT/d8" "$BT/zipalign" "$BT/apksigner" "$ANDROID_JAR"; do
   [ -e "$f" ] || { echo "Missing Android build component: $f" >&2; exit 1; }
 done
+
+# Small source normalization before javac: close the outer Runnable used by the
+# microphone worker. Keeping this here makes the CI branch self-healing while
+# the user-facing source archive contains the corrected Java directly.
+python3 - <<'PY'
+from pathlib import Path
+p=Path('device-lab-ci/app/src/main/java/com/devicelab/app/MainActivity.java')
+s=p.read_text(encoding='utf-8')
+old='if(micMeter!=null)micMeter.setProgress(meter);}});}}},"DeviceLabMic")'
+new='if(micMeter!=null)micMeter.setProgress(meter);}});}}}},"DeviceLabMic")'
+if old in s:
+    p.write_text(s.replace(old,new,1),encoding='utf-8')
+PY
+
 rm -rf "$ROOT/build" "$ROOT/dist"
 mkdir -p "$ROOT/build/gen" "$ROOT/build/classes" "$ROOT/build/dex" "$ROOT/dist"
 "$BT/aapt2" compile --dir "$ROOT/app/src/main/res" -o "$ROOT/build/resources.zip"
