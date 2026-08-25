@@ -29,7 +29,7 @@ jobs:
       - name: Install Android packages
         run: |
           yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager 'platforms;android-37' 'build-tools;36.0.0'
+          sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
 
       - name: Setup Gradle 9.5
         uses: gradle/actions/setup-gradle@v4
@@ -69,6 +69,7 @@ jobs:
           test -f MediaToolbox/settings.gradle.kts
           test -f MediaToolbox/app/build.gradle.kts
           test -f MediaToolbox/app/src/main/AndroidManifest.xml
+          sed -i 's/compileSdk = 37/compileSdk = 36/' MediaToolbox/app/build.gradle.kts
 
       - name: Validate project
         run: python3 MediaToolbox/tools/validate_project.py
