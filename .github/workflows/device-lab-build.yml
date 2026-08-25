@@ -12,7 +12,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -94,6 +94,32 @@ jobs:
         run: |
           chmod +x device-lab-ci/build.sh
           device-lab-ci/build.sh
+
+      - name: Android 15 launch smoke test
+        run: |
+          yes | sdkmanager "system-images;android-35;google_apis;x86_64"
+          echo no | avdmanager create avd -n devlab_api35 -k "system-images;android-35;google_apis;x86_64" --force
+          "$ANDROID_SDK_ROOT/emulator/emulator" -avd devlab_api35 -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect > /tmp/devlab-emulator.log 2>&1 &
+          adb wait-for-device
+          for i in $(seq 1 120); do
+            BOOT="$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')"
+            [ "$BOOT" = "1" ] && break
+            sleep 2
+          done
+          [ "$(adb shell getprop sys.boot_completed | tr -d '\r')" = "1" ]
+          adb install -r device-lab-ci/dist/DeviceLab-v4.0.apk
+          adb logcat -c
+          adb shell am force-stop com.devicelab.app
+          adb shell am start -W -n com.devicelab.app/.MainActivity | tee /tmp/devlab-am-start.txt
+          sleep 5
+          adb shell dumpsys activity activities > /tmp/devlab-activities.txt
+          adb logcat -d > /tmp/devlab-logcat.txt
+          grep -F "com.devicelab.app/.MainActivity" /tmp/devlab-activities.txt
+          if grep -A20 -B5 -E "FATAL EXCEPTION|Process: com.devicelab.app" /tmp/devlab-logcat.txt; then
+            echo "Device Lab launch crash detected" >&2
+            exit 1
+          fi
+          echo "DEVICE LAB LAUNCH SMOKE TEST: PASS"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
