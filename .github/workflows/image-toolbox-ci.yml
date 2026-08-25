@@ -39,7 +39,7 @@ jobs:
             ci/image-toolbox/source.part.03d6 \
             ci/image-toolbox/source.part.04 | base64 -d > ImageToolbox-source.zip
           unzip -q ImageToolbox-source.zip
-      - name: Apply final compatibility and startup fix
+      - name: Apply V3 startup compatibility fixes
         run: |
           set -euo pipefail
           cd ImageToolboxProject
@@ -52,13 +52,11 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           p=Path('AndroidManifest.xml')
-          s=p.read_text()
-          s=s.replace('android:theme="@style/AppTheme.Splash"','android:theme="@style/AppTheme"')
+          s=p.read_text().replace('android:theme="@style/AppTheme.Splash"','android:theme="@style/AppTheme"')
           p.write_text(s)
 
           p=Path('src/com/imagetoolbox/app/MainActivity.java')
-          s=p.read_text()
-          s=s.replace('public class MainActivity extends BaseActivity {','public class MainActivity extends android.app.Activity {')
+          s=p.read_text().replace('public class MainActivity extends BaseActivity {','public class MainActivity extends android.app.Activity {')
           old='@Override protected void onCreate(Bundle b){super.onCreate(b);setContentView(build());handleIncoming(getIntent());}'
           new='''@Override protected void onCreate(Bundle b){
                   super.onCreate(b);
@@ -82,8 +80,8 @@ jobs:
           if old not in s:
               raise SystemExit('MainActivity original onCreate pattern missing')
           s=s.replace(old,new)
-          s=s.replace('@Override protected void onResume(){super.onResume();refreshHistory();}', '@Override protected void onResume(){super.onResume();try{refreshHistory();}catch(Throwable ignored){}}')
           s=s.replace('@Override protected void onNewIntent(Intent i){super.onNewIntent(i);setIntent(i);handleIncoming(i);}', '@Override protected void onNewIntent(Intent i){super.onNewIntent(i);setIntent(i);try{handleIncoming(i);}catch(Throwable ignored){}}')
+          s=s.replace('@Override protected void onResume(){super.onResume();refreshHistory();}', '@Override protected void onResume(){super.onResume();try{refreshHistory();}catch(Throwable ignored){}}')
           p.write_text(s)
 
           Path('src/com/imagetoolbox/app/BaseActivity.java').write_text('''package com.imagetoolbox.app;
@@ -103,6 +101,57 @@ jobs:
           }
           ''')
           PY
+      - name: Apply Samsung navigation bar inset fix
+        run: |
+          set -euo pipefail
+          cd ImageToolboxProject
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p=Path('src/com/imagetoolbox/app/Ui.java')
+          s=p.read_text()
+          s=s.replace('import android.view.ViewGroup;', 'import android.view.ViewGroup;\nimport android.view.WindowInsets;\nimport android.os.Build;')
+          helper='''
+              public static void applyBottomSystemInset(View v, int baseBottomPx) {
+                  final int left=v.getPaddingLeft(), top=v.getPaddingTop(), right=v.getPaddingRight();
+                  v.setOnApplyWindowInsetsListener((view, insets) -> {
+                      int bottom = 0;
+                      try {
+                          if (Build.VERSION.SDK_INT >= 30) {
+                              bottom = insets.getInsets(WindowInsets.Type.navigationBars()).bottom;
+                          } else {
+                              bottom = insets.getSystemWindowInsetBottom();
+                          }
+                      } catch (Throwable ignored) {}
+                      view.setPadding(left, top, right, baseBottomPx + Math.max(0,bottom));
+                      return insets;
+                  });
+                  v.requestApplyInsets();
+              }
+
+          '''
+          needle='    public static LinearLayout header(Context c, String title, String subtitle, View.OnClickListener back) {'
+          if needle not in s:
+              raise SystemExit('Ui header insertion point missing')
+          s=s.replace(needle, helper+needle)
+          p.write_text(s)
+
+          p=Path('src/com/imagetoolbox/app/EditorActivity.java')
+          s=p.read_text()
+          old='bottom.addView(share);bottom.addView(gallery);bottom.addView(save);root.addView(bottom);return root;}'
+          new='bottom.addView(share);bottom.addView(gallery);bottom.addView(save);Ui.applyBottomSystemInset(bottom,Ui.dp(this,12));root.addView(bottom);return root;}'
+          if old not in s:
+              raise SystemExit('Editor bottom bar pattern missing')
+          p.write_text(s.replace(old,new))
+
+          p=Path('src/com/imagetoolbox/app/CropActivity.java')
+          s=p.read_text()
+          old='panel.addView(actions);root.addView(panel);return root;}'
+          new='panel.addView(actions);Ui.applyBottomSystemInset(panel,Ui.dp(this,12));root.addView(panel);return root;}'
+          if old not in s:
+              raise SystemExit('Crop bottom panel pattern missing')
+          p.write_text(s.replace(old,new))
+          PY
           chmod +x build.sh
       - name: Build with native Android CLI chain
         run: bash ImageToolboxProject/build.sh
@@ -113,12 +162,12 @@ jobs:
           unzip -t ImageToolboxProject/build/ImageToolbox.apk
           sha256sum ImageToolboxProject/build/ImageToolbox.apk > ImageToolbox-SHA256.txt
       - name: Package exact fixed source
-        run: zip -qr ImageToolbox-source-v3.zip ImageToolboxProject -x 'ImageToolboxProject/build/*'
+        run: zip -qr ImageToolbox-source-V4.zip ImageToolboxProject -x 'ImageToolboxProject/build/*'
       - uses: actions/upload-artifact@v4
         with:
-          name: ImageToolbox-V3
+          name: ImageToolbox-V4
           if-no-files-found: error
           path: |
             ImageToolboxProject/build/ImageToolbox.apk
-            ImageToolbox-source-v3.zip
+            ImageToolbox-source-V4.zip
             ImageToolbox-SHA256.txt
