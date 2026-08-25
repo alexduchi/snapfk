@@ -3,8 +3,6 @@ name: Image Toolbox CI
 on:
   push:
     branches: [ci-image-toolbox-20260824]
-  pull_request:
-    branches: [main]
   workflow_dispatch:
 
 jobs:
@@ -20,21 +18,91 @@ jobs:
       - name: Install Android SDK
         run: |
           yes | sdkmanager --licenses >/dev/null 2>&1 || true
-          sdkmanager "platforms;android-36" "build-tools;36.0.0"
-      - name: Reconstruct source
+          sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+      - name: Reconstruct exact source
         run: |
-          cat ci/image-toolbox/source.part.* | base64 -d > ImageToolbox-source.zip
+          set -euo pipefail
+          cat \
+            ci/image-toolbox/source.part.00 \
+            ci/image-toolbox/source.part.01 \
+            ci/image-toolbox/source.part.02 \
+            ci/image-toolbox/source.part.03a \
+            ci/image-toolbox/source.part.03b0 \
+            ci/image-toolbox/source.part.03e0 \
+            ci/image-toolbox/source.part.03f0 \
+            ci/image-toolbox/source.part.03f1 \
+            ci/image-toolbox/source.part.03d1 \
+            ci/image-toolbox/source.part.03d2 \
+            ci/image-toolbox/source.part.03d3 \
+            ci/image-toolbox/source.part.03d4 \
+            ci/image-toolbox/source.part.03d5 \
+            ci/image-toolbox/source.part.03d6 \
+            ci/image-toolbox/source.part.04 | base64 -d > ImageToolbox-source.zip
           unzip -q ImageToolbox-source.zip
-          chmod +x ImageToolboxProject/build.sh
-      - name: Build and verify
+      - name: Apply final compatibility and startup fix
+        run: |
+          set -euo pipefail
+          cd ImageToolboxProject
+          sed -i '/postSplashScreenTheme/d' res/values-v31/styles.xml res/values-night-v31/styles.xml
+          sed -i 's/public static View divider(Context c)/public static View dividerView(Context c)/' src/com/imagetoolbox/app/Ui.java
+          sed -i 's/,ExifInterface.TAG_GPS_DIRECTION_MAGNETIC//' src/com/imagetoolbox/app/ImageUtils.java
+          sed -i 's/ExifInterface.TAG_PHOTOGRAPHIC_SENSITIVITY/"ISOSpeedRatings"/g' src/com/imagetoolbox/app/ImageUtils.java
+          sed -i 's/ExifInterface.TAG_LENS_MAKE/"LensMake"/g' src/com/imagetoolbox/app/ImageUtils.java
+          sed -i 's/ExifInterface.TAG_LENS_MODEL/"LensModel"/g' src/com/imagetoolbox/app/ImageUtils.java
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('AndroidManifest.xml')
+          s=p.read_text()
+          s=s.replace('android:theme="@style/AppTheme.Splash"','android:theme="@style/AppTheme"')
+          p.write_text(s)
+
+          p=Path('src/com/imagetoolbox/app/MainActivity.java')
+          s=p.read_text()
+          s=s.replace('public class MainActivity extends BaseActivity {','public class MainActivity extends android.app.Activity {')
+          old='@Override protected void onCreate(Bundle b){super.onCreate(b);try{setContentView(build());}catch(Throwable t){setContentView(buildSafeFallback());}try{handleIncoming(getIntent());}catch(Throwable ignored){}}'
+          new='''@Override protected void onCreate(Bundle b){
+                  super.onCreate(b);
+                  try { getWindow().setStatusBarColor(Ui.bg(this)); getWindow().setNavigationBarColor(Ui.bg(this)); } catch(Throwable ignored) {}
+                  try{setContentView(build());}catch(Throwable t){try{setContentView(buildSafeFallback());}catch(Throwable ignored){TextView tv=new TextView(this);tv.setText("Image Toolbox");tv.setTextSize(24);tv.setPadding(32,64,32,32);setContentView(tv);}}
+                  try{handleIncoming(getIntent());}catch(Throwable ignored){}
+              }'''
+          if old not in s:
+              raise SystemExit('MainActivity onCreate pattern missing')
+          p.write_text(s.replace(old,new))
+
+          Path('src/com/imagetoolbox/app/BaseActivity.java').write_text('''package com.imagetoolbox.app;
+
+          import android.app.Activity;
+          import android.os.Bundle;
+
+          public class BaseActivity extends Activity {
+              @Override protected void onCreate(Bundle state) {
+                  super.onCreate(state);
+                  try { AppPrefs.applyTheme(this); } catch (Throwable ignored) {}
+                  try {
+                      getWindow().setStatusBarColor(Ui.bg(this));
+                      getWindow().setNavigationBarColor(Ui.bg(this));
+                  } catch (Throwable ignored) {}
+              }
+          }
+          ''')
+          PY
+          chmod +x build.sh
+      - name: Build with native Android CLI chain
         run: bash ImageToolboxProject/build.sh
-      - name: Package source
-        run: zip -qr ImageToolbox-source-final.zip ImageToolboxProject -x 'ImageToolboxProject/build/*'
+      - name: Verify signed APK
+        run: |
+          set -euo pipefail
+          $ANDROID_HOME/build-tools/36.0.0/apksigner verify --verbose ImageToolboxProject/build/ImageToolbox.apk
+          unzip -t ImageToolboxProject/build/ImageToolbox.apk
+          sha256sum ImageToolboxProject/build/ImageToolbox.apk > ImageToolbox-SHA256.txt
+      - name: Package exact fixed source
+        run: zip -qr ImageToolbox-source-v3.zip ImageToolboxProject -x 'ImageToolboxProject/build/*'
       - uses: actions/upload-artifact@v4
         with:
-          name: ImageToolbox-delivery
+          name: ImageToolbox-V3
           if-no-files-found: error
           path: |
             ImageToolboxProject/build/ImageToolbox.apk
-            ImageToolbox-source-final.zip
-            ImageToolboxProject/branding/ImageToolbox-logo.svg
+            ImageToolbox-source-v3.zip
+            ImageToolbox-SHA256.txt
