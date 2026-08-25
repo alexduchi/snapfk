@@ -1,0 +1,97 @@
+name: Image Toolbox Runtime Test
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install build SDK
+        run: |
+          yes | sdkmanager --licenses >/dev/null 2>&1 || true
+          sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+      - name: Reconstruct and patch final source
+        run: |
+          set -euo pipefail
+          cat \
+            ci/image-toolbox/source.part.00 \
+            ci/image-toolbox/source.part.01 \
+            ci/image-toolbox/source.part.02 \
+            ci/image-toolbox/source.part.03a \
+            ci/image-toolbox/source.part.03b0 \
+            ci/image-toolbox/source.part.03e0 \
+            ci/image-toolbox/source.part.03f0 \
+            ci/image-toolbox/source.part.03f1 \
+            ci/image-toolbox/source.part.03d1 \
+            ci/image-toolbox/source.part.03d2 \
+            ci/image-toolbox/source.part.03d3 \
+            ci/image-toolbox/source.part.03d4 \
+            ci/image-toolbox/source.part.03d5 \
+            ci/image-toolbox/source.part.03d6 \
+            ci/image-toolbox/source.part.04 \
+            | base64 -d > ImageToolbox-source.zip
+          echo '934d7684c37907505921b66d5d87e8e685388b0acb34db5cb9a3ddd4ed04f4e0  ImageToolbox-source.zip' | sha256sum -c -
+          unzip -q ImageToolbox-source.zip
+          sed -i '/postSplashScreenTheme/d' ImageToolboxProject/res/values-v31/styles.xml ImageToolboxProject/res/values-night-v31/styles.xml
+          sed -i 's/public static View divider(Context c)/public static View dividerView(Context c)/' ImageToolboxProject/src/com/imagetoolbox/app/Ui.java
+          sed -i 's/,ExifInterface.TAG_GPS_DIRECTION_MAGNETIC//' ImageToolboxProject/src/com/imagetoolbox/app/ImageUtils.java
+          sed -i 's/ExifInterface.TAG_PHOTOGRAPHIC_SENSITIVITY/"ISOSpeedRatings"/g' ImageToolboxProject/src/com/imagetoolbox/app/ImageUtils.java
+          sed -i 's/ExifInterface.TAG_LENS_MAKE/"LensMake"/g' ImageToolboxProject/src/com/imagetoolbox/app/ImageUtils.java
+          sed -i 's/ExifInterface.TAG_LENS_MODEL/"LensModel"/g' ImageToolboxProject/src/com/imagetoolbox/app/ImageUtils.java
+          chmod +x ImageToolboxProject/build.sh
+          bash ImageToolboxProject/build.sh
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm || true
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: |
+            set -euo pipefail
+            adb install -r ImageToolboxProject/build/ImageToolbox.apk
+            adb logcat -c
+            set +e
+            adb shell am start -W -n com.imagetoolbox.app/.MainActivity > am-start.txt 2>&1
+            start_status=$?
+            sleep 3
+            pid="$(adb shell pidof com.imagetoolbox.app | tr -d '\r')"
+            adb logcat -d -v threadtime > logcat.txt
+            adb shell dumpsys activity activities > activities.txt
+            echo "am_start_status=$start_status" > runtime-status.txt
+            echo "pid=$pid" >> runtime-status.txt
+            if [ -n "$pid" ]; then
+              echo 'APP_ALIVE=1' >> runtime-status.txt
+            else
+              echo 'APP_ALIVE=0' >> runtime-status.txt
+            fi
+            grep -n -A80 -B20 -E 'FATAL EXCEPTION|AndroidRuntime|Process: com.imagetoolbox.app|Unable to start activity' logcat.txt > crash-extract.txt || true
+            cat am-start.txt
+            cat runtime-status.txt
+            cat crash-extract.txt
+            test -n "$pid"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ImageToolbox-runtime-diagnostics
+          path: |
+            am-start.txt
+            runtime-status.txt
+            logcat.txt
+            crash-extract.txt
+            activities.txt
