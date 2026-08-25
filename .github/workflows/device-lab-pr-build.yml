@@ -1,0 +1,45 @@
+name: Device Lab PR Build
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install Android SDK
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Reconstruct source
+        run: |
+          set -euo pipefail
+          rm -rf device-lab
+          base64 -d device-lab-source.tgz.b64 > DeviceLab-sources.zip
+          unzip -q DeviceLab-sources.zip
+      - name: Build APK
+        working-directory: device-lab
+        run: gradle --no-daemon :app:assembleDebug --stacktrace
+      - name: Verify APK
+        run: "$ANDROID_HOME/build-tools/35.0.0/apksigner verify --verbose device-lab/app/build/outputs/apk/debug/app-debug.apk"
+      - name: Collect
+        run: |
+          mkdir -p out
+          cp device-lab/app/build/outputs/apk/debug/app-debug.apk out/DeviceLab-v1.0-debug.apk
+          cp DeviceLab-sources.zip out/DeviceLab-sources.zip
+          sha256sum out/DeviceLab-v1.0-debug.apk out/DeviceLab-sources.zip > out/SHA256.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DeviceLab-v1.0
+          path: out/
