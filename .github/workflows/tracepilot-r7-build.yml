@@ -31,8 +31,7 @@ jobs:
           from pathlib import Path
           root=Path('tracepilot_r7_project/app/src/main/java/com/neo/tracepilot')
           p=root/'TraceDb.java'
-          s=p.read_text().replace('void meta(String k,String val)', 'void setMeta(String k,String val)')
-          p.write_text(s)
+          p.write_text(p.read_text().replace('void meta(String k,String val)', 'void setMeta(String k,String val)'))
           p=root/'TrackingService.java'
           p.write_text(p.read_text().replace('db.meta(', 'db.setMeta('))
           p=root/'MainActivity.java'
@@ -42,6 +41,12 @@ jobs:
           old='JSONArray q=new JSONArray();q.put(g.aLat+(g.bLat-g.aLat)*f);q.put(g.aLon+(g.bLon-g.aLon)*f);a.put(q);'
           new='JSONArray q=new JSONArray();try{q.put(g.aLat+(g.bLat-g.aLat)*f);q.put(g.aLon+(g.bLon-g.aLon)*f);a.put(q);}catch(Throwable ignored){}'
           if old not in s: raise SystemExit('reconstruction patch anchor missing')
+          p.write_text(s.replace(old,new))
+          p=root/'MapActivity.java'
+          s=p.read_text()
+          old='for(TraceDb.Point q:p){JSONArray z=new JSONArray();z.put(q.lat);z.put(q.lon);z.put(q.mode);r.put(z);}'
+          new='for(TraceDb.Point q:p){JSONArray z=new JSONArray();try{z.put(q.lat);z.put(q.lon);z.put(q.mode);r.put(z);}catch(Throwable ignored){}}'
+          if old not in s: raise SystemExit('map patch anchor missing')
           p.write_text(s.replace(old,new))
           PY
       - name: Build real Java D8 Android APK
