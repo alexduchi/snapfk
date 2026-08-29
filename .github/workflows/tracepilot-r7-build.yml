@@ -33,25 +33,13 @@ jobs:
           from pathlib import Path
           root=Path('tp7/app/src/main/java/com/neo/tracepilot')
           p=root/'TraceDb.java'
-          s=p.read_text()
-          s=s.replace('void meta(String k,String val)', 'void setMeta(String k,String val)')
-          s=s.replace('String meta(String k,String def)', 'String getMeta(String k,String def)')
+          s=p.read_text().replace('void meta(String k,String val)', 'void setMeta(String k,String val)').replace('String meta(String k,String def)', 'String getMeta(String k,String def)')
           p.write_text(s)
-          p=root/'TrackingService.java'
-          s=p.read_text().replace('db.meta(', 'db.setMeta(')
-          p.write_text(s)
-          p=root/'MainActivity.java'
-          s=p.read_text().replace('db.meta(', 'db.getMeta(')
-          p.write_text(s)
-          p=root/'MapActivity.java'
-          s=p.read_text()
-          old='for(TraceDb.P q:p){JSONArray z=new JSONArray();z.put(q.lat);z.put(q.lon);z.put(q.mode);a.put(z);}'
-          new='for(TraceDb.P q:p){try{JSONArray z=new JSONArray();z.put(q.lat);z.put(q.lon);z.put(q.mode);a.put(z);}catch(Exception ignored){}}'
-          if old not in s:
-              raise SystemExit('MapActivity patch target not found')
-          p.write_text(s.replace(old,new))
+          p=root/'TrackingService.java'; p.write_text(p.read_text().replace('db.meta(', 'db.setMeta('))
+          p=root/'MainActivity.java'; p.write_text(p.read_text().replace('db.meta(', 'db.getMeta('))
+          p=root/'MapActivity.java'; s=p.read_text(); old='for(TraceDb.P q:p){JSONArray z=new JSONArray();z.put(q.lat);z.put(q.lon);z.put(q.mode);a.put(z);}'; new='for(TraceDb.P q:p){try{JSONArray z=new JSONArray();z.put(q.lat);z.put(q.lon);z.put(q.mode);a.put(z);}catch(Exception ignored){}}'; p.write_text(s.replace(old,new))
+          p=root/'Reconstruction.java'; s=p.read_text(); old='JSONArray p=new JSONArray();p.put(a+(c-a)*t);p.put(b+(d-b)*t);out.put(p);'; new='try{JSONArray p=new JSONArray();p.put(a+(c-a)*t);p.put(b+(d-b)*t);out.put(p);}catch(Exception ignored){}'; p.write_text(s.replace(old,new));
           PY
-          grep -R 'setMeta\|getMeta' -n tp7/app/src/main/java/com/neo/tracepilot | head -30
       - name: Build TracePilot
         run: bash tp7/build.sh
       - name: Inspect APK
