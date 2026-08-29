@@ -50,6 +50,13 @@ jobs:
           if old not in s:
               raise SystemExit('MapActivity patch target not found')
           p.write_text(s.replace(old,new))
+          p=root/'Reconstruction.java'
+          s=p.read_text()
+          old='static String line(TraceDb.G g,int n){JSONArray a=new JSONArray();for(int i=0;i<n;i++){double f=i/(double)(n-1);JSONArray q=new JSONArray();q.put(g.slat+(g.elat-g.slat)*f);q.put(g.slon+(g.elon-g.slon)*f);a.put(q);}return a.toString();}'
+          new='static String line(TraceDb.G g,int n){JSONArray a=new JSONArray();for(int i=0;i<n;i++){try{double f=i/(double)(n-1);JSONArray q=new JSONArray();q.put(g.slat+(g.elat-g.slat)*f);q.put(g.slon+(g.elon-g.slon)*f);a.put(q);}catch(Exception ignored){}}return a.toString();}'
+          if old not in s:
+              raise SystemExit('Reconstruction patch target not found')
+          p.write_text(s.replace(old,new))
           PY
           grep -R 'setMeta\|getMeta' -n tp7/app/src/main/java/com/neo/tracepilot | head -30
       - name: Build TracePilot
