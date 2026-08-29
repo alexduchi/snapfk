@@ -1,0 +1,38 @@
+name: TracePilot R7 Build
+on:
+  push:
+    branches:
+      - 'tracepilot-r7-*'
+    paths:
+      - 'tracepilot-r7/**'
+      - '.github/workflows/tracepilot-r7-build.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Unpack project
+        run: |
+          rm -rf tracepilot-r7-src
+          mkdir -p tracepilot-r7-src
+          tar -xzf tracepilot-r7/project.tar.gz -C tracepilot-r7-src
+      - name: Build native Android APK
+        run: bash tracepilot-r7-src/build.sh
+      - name: Upload unsigned APK and sources
+        uses: actions/upload-artifact@v4
+        with:
+          name: tracepilot-r7-build
+          path: |
+            tracepilot-r7-src/dist/TracePilot-R7-FULLCORE-UNSIGNED.apk
+            tracepilot-r7-src/dist/TracePilot-R7-FULLCORE-UNSIGNED.apk.sha256
+            tracepilot-r7-src/dist/TracePilot-R7-source.zip
+          if-no-files-found: error
+          retention-days: 2
