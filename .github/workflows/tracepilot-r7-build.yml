@@ -47,6 +47,12 @@ jobs:
           new='static String line(TraceDb.Gap g,int n){try{JSONArray a=new JSONArray();for(int i=0;i<n;i++){double f=i/(double)(n-1);JSONArray p=new JSONArray();p.put(g.slat+(g.elat-g.slat)*f);p.put(g.slon+(g.elon-g.slon)*f);a.put(p);}return a.toString();}catch(Throwable t){return "[]";}}'
           assert old in s
           rec.write_text(s.replace(old,new,1))
+
+          mp=Path('/tmp/tp7/tracepilot_r7_project/app/src/main/java/com/neo/tracepilot/MapActivity.java')
+          s=mp.read_text()
+          old='q.put(x.lat);q.put(x.lon);q.put(x.mode);'
+          assert old in s
+          mp.write_text(s.replace(old,'q.put(String.valueOf(x.lat));q.put(String.valueOf(x.lon));q.put(x.mode);',1))
           PY
       - name: Build native Android APK
         run: bash /tmp/tp7/tracepilot_r7_project/build.sh
