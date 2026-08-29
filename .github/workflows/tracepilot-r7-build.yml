@@ -43,6 +43,13 @@ jobs:
           p=root/'MainActivity.java'
           s=p.read_text().replace('db.meta(', 'db.getMeta(')
           p.write_text(s)
+          p=root/'MapActivity.java'
+          s=p.read_text()
+          old='for(TraceDb.P q:p){JSONArray z=new JSONArray();z.put(q.lat);z.put(q.lon);z.put(q.mode);a.put(z);}'
+          new='for(TraceDb.P q:p){try{JSONArray z=new JSONArray();z.put(q.lat);z.put(q.lon);z.put(q.mode);a.put(z);}catch(Exception ignored){}}'
+          if old not in s:
+              raise SystemExit('MapActivity patch target not found')
+          p.write_text(s.replace(old,new))
           PY
           grep -R 'setMeta\|getMeta' -n tp7/app/src/main/java/com/neo/tracepilot | head -30
       - name: Build TracePilot
