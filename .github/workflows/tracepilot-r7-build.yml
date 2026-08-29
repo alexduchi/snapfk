@@ -19,7 +19,7 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - name: Unpack project and apply compile fix
+      - name: Unpack project and apply compile fixes
         run: |
           rm -rf tracepilot-r7-src
           mkdir -p tracepilot-r7-src
@@ -30,10 +30,16 @@ jobs:
           s=p.read_text()
           old='JSONArray a=new JSONArray();for(TraceDb.Point x:p){JSONArray q=new JSONArray();q.put(x.lat);q.put(x.lon);a.put(q);}'
           new='JSONArray a=new JSONArray();try{for(TraceDb.Point x:p){JSONArray q=new JSONArray();q.put(x.lat);q.put(x.lon);a.put(q);}}catch(org.json.JSONException je){throw new RuntimeException(je);}'
-          if old in s:
-              p.write_text(s.replace(old,new))
-          elif new not in s:
-              raise SystemExit('MapActivity patch target not found')
+          if old in s: s=s.replace(old,new)
+          elif new not in s: raise SystemExit('MapActivity patch target not found')
+          p.write_text(s)
+          p=Path('tracepilot-r7-src/app/src/main/java/com/neo/tracepilot/Reconstructor.java')
+          s=p.read_text()
+          old='static String line(TraceDb.Gap g,int n){JSONArray a=new JSONArray();for(int i=0;i<n;i++){double f=i/(double)(n-1);JSONArray p=new JSONArray();p.put(g.startLat+(g.endLat-g.startLat)*f);p.put(g.startLon+(g.endLon-g.startLon)*f);a.put(p);}return a.toString();}'
+          new='static String line(TraceDb.Gap g,int n){JSONArray a=new JSONArray();try{for(int i=0;i<n;i++){double f=i/(double)(n-1);JSONArray p=new JSONArray();p.put(g.startLat+(g.endLat-g.startLat)*f);p.put(g.startLon+(g.endLon-g.startLon)*f);a.put(p);}}catch(org.json.JSONException je){throw new RuntimeException(je);}return a.toString();}'
+          if old in s: s=s.replace(old,new)
+          elif new not in s: raise SystemExit('Reconstructor patch target not found')
+          p.write_text(s)
           PY
       - name: Build native Android APK
         run: bash tracepilot-r7-src/build.sh
