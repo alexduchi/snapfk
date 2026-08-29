@@ -25,21 +25,24 @@ jobs:
           base64 -d tracepilot-r7-project.b64 > tracepilot-r7-project.zip
           echo '6f5d9f42f8860e803854eb9fa893f5d3325a78cf938389a20b80e8e6d6c20215  tracepilot-r7-project.zip' | sha256sum -c -
           unzip -q tracepilot-r7-project.zip
-      - name: Apply compile fix
+      - name: Apply compile fixes
         run: |
           python3 - <<'PY'
           from pathlib import Path
           root=Path('tracepilot_r7_project/app/src/main/java/com/neo/tracepilot')
           p=root/'TraceDb.java'
-          s=p.read_text()
-          s=s.replace('void meta(String k,String val)', 'void setMeta(String k,String val)')
+          s=p.read_text().replace('void meta(String k,String val)', 'void setMeta(String k,String val)')
           p.write_text(s)
           p=root/'TrackingService.java'
-          s=p.read_text().replace('db.meta(', 'db.setMeta(')
-          p.write_text(s)
+          p.write_text(p.read_text().replace('db.meta(', 'db.setMeta('))
           p=root/'MainActivity.java'
-          s=p.read_text().replace('db.meta("service_state","stopped");', 'db.setMeta("service_state","stopped");')
-          p.write_text(s)
+          p.write_text(p.read_text().replace('db.meta("service_state","stopped");', 'db.setMeta("service_state","stopped");'))
+          p=root/'ReconstructionEngine.java'
+          s=p.read_text()
+          old='JSONArray q=new JSONArray();q.put(g.aLat+(g.bLat-g.aLat)*f);q.put(g.aLon+(g.bLon-g.aLon)*f);a.put(q);'
+          new='JSONArray q=new JSONArray();try{q.put(g.aLat+(g.bLat-g.aLat)*f);q.put(g.aLon+(g.bLon-g.aLon)*f);a.put(q);}catch(Throwable ignored){}'
+          if old not in s: raise SystemExit('reconstruction patch anchor missing')
+          p.write_text(s.replace(old,new))
           PY
       - name: Build real Java D8 Android APK
         run: bash tracepilot_r7_project/build.sh
