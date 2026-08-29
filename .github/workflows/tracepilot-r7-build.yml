@@ -1,0 +1,30 @@
+name: TracePilot R7 Build
+on:
+  push:
+    branches: ['tracepilot-r7-*']
+    paths: ['tracepilot-r7/**','.github/workflows/tracepilot-r7-build.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '17'}
+      - name: Unpack project
+        run: |
+          rm -rf /tmp/tp7
+          mkdir -p /tmp/tp7 tracepilot-r7/dist
+          unzip -q tracepilot-r7/project.zip -d /tmp/tp7
+      - name: Build native Android APK
+        run: bash /tmp/tp7/tracepilot_r7_project/build.sh
+      - name: Collect outputs
+        run: cp -v /tmp/tp7/tracepilot_r7_project/dist/* tracepilot-r7/dist/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tracepilot-r7-build
+          path: tracepilot-r7/dist/*
+          retention-days: 2
