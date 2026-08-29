@@ -4,7 +4,7 @@ on:
     branches:
       - 'tracepilot-r7-*'
     paths:
-      - 'tracepilot-r7-project.zip'
+      - 'tracepilot-r7/**'
       - '.github/workflows/tracepilot-r7-build.yml'
   workflow_dispatch:
 permissions:
@@ -19,11 +19,19 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - name: Unpack project
-        run: unzip -q tracepilot-r7-project.zip
-      - name: Build native Android APK
+      - name: Rebuild source ZIP exactly
+        run: |
+          cat tracepilot-r7/chunk-00.b64 tracepilot-r7/chunk-01.b64 tracepilot-r7/chunk-02.b64 tracepilot-r7/chunk-03.b64 > tracepilot-r7-project.b64
+          base64 -d tracepilot-r7-project.b64 > tracepilot-r7-project.zip
+          echo '6f5d9f42f8860e803854eb9fa893f5d3325a78cf938389a20b80e8e6d6c20215  tracepilot-r7-project.zip' | sha256sum -c -
+          unzip -t tracepilot-r7-project.zip
+          unzip -q tracepilot-r7-project.zip
+      - name: Build real Java D8 Android APK
         run: bash tracepilot_r7_project/build.sh
-      - name: Upload APK
+      - name: Package outputs
+        run: |
+          sha256sum tracepilot_r7_project/dist/TracePilot-R7-FULLCORE-UNSIGNED.apk > tracepilot_r7_project/dist/sha256.txt
+      - name: Upload APK and source
         uses: actions/upload-artifact@v4
         with:
           name: tracepilot-r7-build
