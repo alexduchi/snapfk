@@ -25,7 +25,7 @@ jobs:
           test "$(sha256sum /tmp/project.zip | cut -d' ' -f1)" = "ae82847360a4335a63970b53fbb5dbb402a5914c5695e09f0cb39bddaddd6e7b"
           unzip -t /tmp/project.zip
           unzip -q /tmp/project.zip -d /tmp/tp7
-      - name: Apply Java compile fix
+      - name: Apply Java compile fixes
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -34,11 +34,19 @@ jobs:
           old='public void meta(String k,String val)'
           assert old in s
           db.write_text(s.replace(old,'public void setMeta(String k,String val)',1))
+
           svc=Path('/tmp/tp7/tracepilot_r7_project/app/src/main/java/com/neo/tracepilot/TrackingService.java')
           s=svc.read_text()
           s=s.replace('db.meta("sat_visible",""+visible)','db.setMeta("sat_visible",""+visible)')
           s=s.replace('db.meta("sat_used",""+used)','db.setMeta("sat_used",""+used)')
           svc.write_text(s)
+
+          rec=Path('/tmp/tp7/tracepilot_r7_project/app/src/main/java/com/neo/tracepilot/ReconstructionEngine.java')
+          s=rec.read_text()
+          old='static String line(TraceDb.Gap g,int n){JSONArray a=new JSONArray();for(int i=0;i<n;i++){double f=i/(double)(n-1);JSONArray p=new JSONArray();p.put(g.slat+(g.elat-g.slat)*f);p.put(g.slon+(g.elon-g.slon)*f);a.put(p);}return a.toString();}'
+          new='static String line(TraceDb.Gap g,int n){try{JSONArray a=new JSONArray();for(int i=0;i<n;i++){double f=i/(double)(n-1);JSONArray p=new JSONArray();p.put(g.slat+(g.elat-g.slat)*f);p.put(g.slon+(g.elon-g.slon)*f);a.put(p);}return a.toString();}catch(Throwable t){return "[]";}}'
+          assert old in s
+          rec.write_text(s.replace(old,new,1))
           PY
       - name: Build native Android APK
         run: bash /tmp/tp7/tracepilot_r7_project/build.sh
