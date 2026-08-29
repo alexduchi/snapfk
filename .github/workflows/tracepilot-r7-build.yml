@@ -22,10 +22,24 @@ jobs:
           mkdir -p /tmp/tp7
           cat tracepilot-r7/chunk*.b64 > /tmp/project.b64
           base64 -d /tmp/project.b64 > /tmp/project.zip
-          sha256sum /tmp/project.zip
           test "$(sha256sum /tmp/project.zip | cut -d' ' -f1)" = "ae82847360a4335a63970b53fbb5dbb402a5914c5695e09f0cb39bddaddd6e7b"
           unzip -t /tmp/project.zip
           unzip -q /tmp/project.zip -d /tmp/tp7
+      - name: Apply Java compile fix
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          db=Path('/tmp/tp7/tracepilot_r7_project/app/src/main/java/com/neo/tracepilot/TraceDb.java')
+          s=db.read_text()
+          old='public void meta(String k,String val)'
+          assert old in s
+          db.write_text(s.replace(old,'public void setMeta(String k,String val)',1))
+          svc=Path('/tmp/tp7/tracepilot_r7_project/app/src/main/java/com/neo/tracepilot/TrackingService.java')
+          s=svc.read_text()
+          s=s.replace('db.meta("sat_visible",""+visible)','db.setMeta("sat_visible",""+visible)')
+          s=s.replace('db.meta("sat_used",""+used)','db.setMeta("sat_used",""+used)')
+          svc.write_text(s)
+          PY
       - name: Build native Android APK
         run: bash /tmp/tp7/tracepilot_r7_project/build.sh
       - name: Collect outputs
