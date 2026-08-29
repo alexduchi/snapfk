@@ -27,6 +27,24 @@ jobs:
           echo '838f4ff4706890b07c1c88f813623e8336710be7e25f74a14c826d8d5b3ca30b  /tmp/tp7.tar.gz' | sha256sum -c -
           mkdir tp7
           tar -xzf /tmp/tp7.tar.gz -C tp7
+      - name: Apply compiler fixes
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          root=Path('tp7/app/src/main/java/com/neo/tracepilot')
+          p=root/'TraceDb.java'
+          s=p.read_text()
+          s=s.replace('void meta(String k,String val)', 'void setMeta(String k,String val)')
+          s=s.replace('String meta(String k,String def)', 'String getMeta(String k,String def)')
+          p.write_text(s)
+          p=root/'TrackingService.java'
+          s=p.read_text().replace('db.meta(', 'db.setMeta(')
+          p.write_text(s)
+          p=root/'MainActivity.java'
+          s=p.read_text().replace('db.meta(', 'db.getMeta(')
+          p.write_text(s)
+          PY
+          grep -R 'setMeta\|getMeta' -n tp7/app/src/main/java/com/neo/tracepilot | head -30
       - name: Build TracePilot
         run: bash tp7/build.sh
       - name: Inspect APK
