@@ -1,0 +1,3 @@
+package com.neo.tracepilot;
+import android.content.Context;import android.net.ConnectivityManager;import android.net.Network;import android.net.NetworkCapabilities;
+final class Net{static boolean internet(Context c){try{ConnectivityManager m=(ConnectivityManager)c.getSystemService(Context.CONNECTIVITY_SERVICE);if(m==null)return false;Network n=m.getActiveNetwork();if(n==null)return false;NetworkCapabilities x=m.getNetworkCapabilities(n);return x!=null&&x.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)&&x.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED);}catch(Throwable t){return false;}}}
