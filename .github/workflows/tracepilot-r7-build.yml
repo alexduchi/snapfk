@@ -19,11 +19,22 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - name: Unpack project
+      - name: Unpack project and apply compile fix
         run: |
           rm -rf tracepilot-r7-src
           mkdir -p tracepilot-r7-src
           tar -xzf tracepilot-r7/project.tar.gz -C tracepilot-r7-src
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('tracepilot-r7-src/app/src/main/java/com/neo/tracepilot/MapActivity.java')
+          s=p.read_text()
+          old='JSONArray a=new JSONArray();for(TraceDb.Point x:p){JSONArray q=new JSONArray();q.put(x.lat);q.put(x.lon);a.put(q);}'
+          new='JSONArray a=new JSONArray();try{for(TraceDb.Point x:p){JSONArray q=new JSONArray();q.put(x.lat);q.put(x.lon);a.put(q);}}catch(org.json.JSONException je){throw new RuntimeException(je);}'
+          if old in s:
+              p.write_text(s.replace(old,new))
+          elif new not in s:
+              raise SystemExit('MapActivity patch target not found')
+          PY
       - name: Build native Android APK
         run: bash tracepilot-r7-src/build.sh
       - name: Upload unsigned APK and sources
