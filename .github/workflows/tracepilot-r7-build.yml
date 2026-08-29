@@ -3,7 +3,7 @@ on:
   push:
     branches: ['tracepilot-r7-*']
     paths:
-      - 'tracepilot-r7/source.part*'
+      - 'tracepilot-r7/**'
       - '.github/workflows/tracepilot-r7-build.yml'
   workflow_dispatch:
 permissions:
@@ -20,52 +20,16 @@ jobs:
           java-version: '17'
       - uses: android-actions/setup-android@v3
       - name: Install Android SDK
-        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'platform-tools'
-      - name: Restore TracePilot sources
-        run: |
-          cat tracepilot-r7/source.part00 tracepilot-r7/source.part01 tracepilot-r7/source.part02 tracepilot-r7/source.part03 tracepilot-r7/source.part04 | base64 -d > /tmp/tp7.tar.gz
-          echo '838f4ff4706890b07c1c88f813623e8336710be7e25f74a14c826d8d5b3ca30b  /tmp/tp7.tar.gz' | sha256sum -c -
-          mkdir tp7
-          tar -xzf /tmp/tp7.tar.gz -C tp7
-      - name: Apply compiler fixes
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          root=Path('tp7/app/src/main/java/com/neo/tracepilot')
-          p=root/'TraceDb.java'
-          s=p.read_text().replace('void meta(String k,String val)', 'void setMeta(String k,String val)').replace('String meta(String k,String def)', 'String getMeta(String k,String def)')
-          p.write_text(s)
-          p=root/'TrackingService.java'; p.write_text(p.read_text().replace('db.meta(', 'db.setMeta('))
-          p=root/'MainActivity.java'; p.write_text(p.read_text().replace('db.meta(', 'db.getMeta('))
-          p=root/'MapActivity.java'
-          s=p.read_text()
-          old='for(TraceDb.P q:p){JSONArray z=new JSONArray();z.put(q.lat);z.put(q.lon);z.put(q.mode);a.put(z);}'
-          new='for(TraceDb.P q:p){try{JSONArray z=new JSONArray();z.put(q.lat);z.put(q.lon);z.put(q.mode);a.put(z);}catch(Exception ignored){}}'
-          p.write_text(s.replace(old,new))
-          p=root/'Reconstruction.java'
-          s=p.read_text()
-          lines=s.splitlines()
-          found=False
-          replacement='  static String great(double a,double b,double c,double d){JSONArray out=new JSONArray();for(int i=0;i<48;i++){double t=i/47.0;try{JSONArray p=new JSONArray();p.put(a+(c-a)*t);p.put(b+(d-b)*t);out.put(p);}catch(Exception ignored){}}return out.toString();}'
-          for i,line in enumerate(lines):
-              if 'static String great(double a,double b,double c,double d)' in line:
-                  lines[i]=replacement
-                  found=True
-                  break
-          if not found:
-              print('Lines containing great:', [x for x in lines if 'great' in x])
-              raise SystemExit('Reconstruction great() method not found')
-          p.write_text('\n'.join(lines)+'\n')
-          PY
-      - name: Build TracePilot
-        run: bash tp7/build.sh
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.1' 'platform-tools'
+      - name: Build current TracePilot R7 Java source
+        run: bash tracepilot-r7/build.sh
       - name: Inspect APK
         run: |
-          $ANDROID_HOME/build-tools/35.0.0/aapt2 dump badging tp7/dist/TracePilot-R7-FULLCORE-UNSIGNED.apk | tee tp7/dist/badging.txt
-          $ANDROID_HOME/tools/bin/apkanalyzer manifest permissions tp7/dist/TracePilot-R7-FULLCORE-UNSIGNED.apk | tee tp7/dist/permissions.txt || true
+          $ANDROID_HOME/build-tools/35.0.1/aapt2 dump badging tracepilot-r7/dist/TracePilot-R7-FULLCORE-UNSIGNED.apk | tee tracepilot-r7/dist/badging.txt
+          unzip -l tracepilot-r7/dist/TracePilot-R7-FULLCORE-UNSIGNED.apk | tee tracepilot-r7/dist/apk-entries.txt
       - uses: actions/upload-artifact@v4
         with:
           name: tracepilot-r7-build
-          path: tp7/dist/*
+          path: tracepilot-r7/dist/*
           if-no-files-found: error
           retention-days: 2
