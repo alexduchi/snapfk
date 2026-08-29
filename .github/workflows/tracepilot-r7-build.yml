@@ -1,11 +1,8 @@
 name: TracePilot R7 Build
 on:
   push:
-    branches:
-      - 'tracepilot-r7-*'
-    paths:
-      - 'tracepilot-r7/**'
-      - '.github/workflows/tracepilot-r7-build.yml'
+    branches: ['tracepilot-r7-*']
+    paths: ['tracepilot-r7-project.zip', '.github/workflows/tracepilot-r7-build.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -19,24 +16,15 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
-      - name: Install SDK
-        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'platform-tools'
-      - name: Restore sources
-        run: |
-          base64 -d tracepilot-r7/source.b64 > /tmp/tp.tar.gz
-          echo '838f4ff4706890b07c1c88f813623e8336710be7e25f74a14c826d8d5b3ca30b  /tmp/tp.tar.gz' | sha256sum -c -
-          mkdir tp7
-          tar -xzf /tmp/tp.tar.gz -C tp7
-      - name: Build
-        run: bash tp7/build.sh
-      - name: Inspect
-        run: |
-          aapt2 dump badging tp7/dist/TracePilot-R7-FULLCORE-UNSIGNED.apk | tee tp7/dist/badging.txt
-          apkanalyzer manifest permissions tp7/dist/TracePilot-R7-FULLCORE-UNSIGNED.apk | tee tp7/dist/permissions.txt
+      - name: Extract project
+        run: mkdir tracepilot-r7 && unzip -q tracepilot-r7-project.zip -d tracepilot-r7
+      - name: Build TracePilot
+        run: bash tracepilot-r7/build.sh
       - uses: actions/upload-artifact@v4
         with:
           name: tracepilot-r7-build
-          path: tp7/dist/*
-          if-no-files-found: error
+          path: |
+            tracepilot-r7/dist/TracePilot-R7-FULLCORE-UNSIGNED.apk
+            tracepilot-r7/dist/TracePilot-R7-FULLCORE-UNSIGNED.apk.sha256
+            tracepilot-r7/dist/TracePilot-R7-source.zip
           retention-days: 2
