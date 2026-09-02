@@ -1,0 +1,55 @@
+name: AFK God Windows v1.3.4 build
+
+on:
+  push:
+    branches:
+      - temp-afkgod-win-v134
+    paths:
+      - .github/workflows/afkgod-win-v134.yml
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+      - name: Restore source
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force -Path C:\afkgod | Out-Null
+          $b64 = Get-Content -Raw tmp-afkgod-win-v134/source.tgz.b64
+          [IO.File]::WriteAllBytes('C:\afkgod\src.tgz',[Convert]::FromBase64String($b64))
+          tar -xzf C:\afkgod\src.tgz -C C:\afkgod
+      - name: Install manifest resource tool
+        shell: powershell
+        run: go install github.com/akavel/rsrc@latest
+      - name: Embed requireAdministrator manifest
+        shell: powershell
+        working-directory: C:\afkgod
+        run: rsrc -manifest app.manifest -o rsrc.syso
+      - name: Test
+        shell: powershell
+        working-directory: C:\afkgod
+        run: |
+          go test ./...
+          go vet ./...
+      - name: Build Windows GUI
+        shell: powershell
+        working-directory: C:\afkgod
+        run: go build -ldflags="-H windowsgui -s -w" -o AFKGodNode-Windows-v1.3.4.exe .
+      - name: Verify manifest
+        shell: powershell
+        run: |
+          $m = (Get-Item C:\afkgod\AFKGodNode-Windows-v1.3.4.exe).VersionInfo
+          if (!(Test-Path C:\afkgod\AFKGodNode-Windows-v1.3.4.exe)) { exit 1 }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AFKGodNode-Windows-v1.3.4
+          path: C:\afkgod\AFKGodNode-Windows-v1.3.4.exe
+          if-no-files-found: error
